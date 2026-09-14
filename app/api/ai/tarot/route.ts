@@ -102,8 +102,9 @@ export async function POST(request: NextRequest) {
     const missingKey = error instanceof OpenAIConfigError;
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
+        error: missingKey
+          ? "OpenAI API 키가 없어요. 로컬은 .env.local에, 배포는 Vercel Settings → Environment Variables에 OPENAI_API_KEY를 등록해 주세요."
+          : error instanceof Error
             ? error.message
             : "타로 카드를 펼치지 못했어요.",
         code: missingKey ? "MISSING_API_KEY" : "TAROT_READING_FAILED",

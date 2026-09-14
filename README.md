@@ -35,3 +35,16 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=공개용_PUBLISHABLE_KEY
 Supabase Authentication의 Email 로그인을 사용합니다. 배포 후에는 Authentication의 URL Configuration에서 Site URL을 실제 배포 주소로 바꾸고 Redirect URLs에 같은 주소를 추가해야 가입 확인 메일이 올바르게 돌아옵니다.
 
 사용자 데이터는 `user_workspaces` 테이블의 JSON 데이터로 저장되며, Row Level Security 정책이 로그인한 본인의 행에만 접근하도록 제한합니다. 기존 브라우저의 로컬 데이터는 해당 사용자가 처음 로그인할 때 계정 저장소로 한 번 가져옵니다.
+
+## OpenAI 기능 연결
+
+AI 자소서 추천과 취업 타로 기능을 사용하려면 서버 환경 변수에 API 키를 등록합니다.
+
+로컬에서는 프로젝트 최상위의 `.env.local` 파일에 입력합니다.
+
+```env
+OPENAI_API_KEY=발급받은_API_키
+OPENAI_MODEL=gpt-5.4-nano
+```
+
+Vercel 배포에서는 프로젝트의 `Settings → Environment Variables`에 `OPENAI_API_KEY`를 등록하고 다시 배포합니다. API 키는 브라우저에 노출되는 `NEXT_PUBLIC_` 변수나 GitHub 저장소에 넣지 않습니다.

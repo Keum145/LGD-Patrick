@@ -2108,6 +2108,12 @@ export default function Home() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setTarot((previous) => ({ ...previous, open: true }))}
+          className="mr-2 flex items-center gap-1.5 rounded-full border border-[#d8cdf1] bg-[#f3efff] px-3.5 py-2 text-[11px] font-extrabold text-[#6754a8] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#ece5fb]"
+        >
+          🔮 취업 타로방
+        </button>
         <span className="mr-1 text-[11px] font-extrabold text-[#8f8a82]">
           빠른 공고 찾기
         </span>
@@ -2178,25 +2184,15 @@ export default function Home() {
               </div>
             </div>
             <div className="relative z-10 ml-2 flex shrink-0 flex-col items-end gap-3">
-              <div className="flex flex-wrap justify-end gap-1.5">
-                <button
-                  onClick={() => {
-                    setBirthdayDraft(birthday);
-                    setBirthdayModalOpen(true);
-                  }}
-                  className="rounded-full border border-[#eadfd2] bg-white/80 px-2.5 py-1.5 text-[10px] font-extrabold text-[#7d756d] shadow-sm"
-                >
-                  {birthday ? "🎂 생일 수정" : "🎂 생일 등록"}
-                </button>
-                <button
-                  onClick={() =>
-                    setTarot((previous) => ({ ...previous, open: true }))
-                  }
-                  className="rounded-full border border-[#d9cff4] bg-[#f3efff] px-2.5 py-1.5 text-[10px] font-extrabold text-[#6754a8] shadow-sm transition hover:-translate-y-0.5"
-                >
-                  🔮 취업 타로방
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setBirthdayDraft(birthday);
+                  setBirthdayModalOpen(true);
+                }}
+                className="rounded-full border border-[#eadfd2] bg-white/80 px-2.5 py-1.5 text-[10px] font-extrabold text-[#7d756d] shadow-sm"
+              >
+                {birthday ? "🎂 생일 수정" : "🎂 생일 등록"}
+              </button>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() =>
@@ -3314,6 +3310,26 @@ export default function Home() {
                   ? "30년 내공으로 카드를 읽는 중…"
                   : "세 장의 카드 펼치기"}
               </button>
+              <details className="mt-3 rounded-xl border border-dashed border-[#d9d0e5] bg-[#fbf9fd] px-3 py-2.5 text-[10px] leading-5 text-[#817888]">
+                <summary className="cursor-pointer font-extrabold text-[#6b5a7c]">
+                  관리자용 · OpenAI API 키는 어디에 넣나요?
+                </summary>
+                <div className="mt-2 space-y-1">
+                  <p>
+                    로컬: 프로젝트 최상위의 <b>.env.local</b> 파일에
+                    <code className="ml-1 rounded bg-white px-1.5 py-0.5">
+                      OPENAI_API_KEY=발급받은_키
+                    </code>
+                  </p>
+                  <p>
+                    Vercel: <b>Project → Settings → Environment Variables</b>에
+                    이름을 <b>OPENAI_API_KEY</b>로 등록한 뒤 재배포하세요.
+                  </p>
+                  <p className="font-bold text-[#b06575]">
+                    키를 NEXT_PUBLIC_ 변수나 GitHub 코드에 넣으면 안 됩니다.
+                  </p>
+                </div>
+              </details>
               {tarot.error && (
                 <div className="mt-4 rounded-2xl bg-[#fff0f3] p-4 text-center text-xs font-bold leading-5 text-[#bd5d70]">
                   {tarot.error}
