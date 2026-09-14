@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
@@ -643,15 +644,21 @@ const fortuneMessages = [
 function Patrick() {
   return (
     <div
-      className="relative h-28 w-32 shrink-0"
+      className="patrick-scene group relative h-28 w-32 shrink-0"
       aria-label="뚱이 캐릭터 이미지"
     >
-      <span className="absolute left-2 top-2 h-4 w-4 rounded-full bg-[#a8e6cf]/50" />
-      <span className="absolute right-0 top-8 h-2.5 w-2.5 rounded-full bg-[#a8e6cf]/60" />
-      <img
-        src="https://clipart-library.com/2023/437-4377884_characters-clipart-spongebob-patrick-star-transparent-hd-png.png"
-        alt="신나게 두 팔을 든 뚱이"
-        className="relative z-10 h-full w-full object-contain drop-shadow-[0_8px_10px_rgba(255,133,162,.22)]"
+      <span className="patrick-bubble patrick-bubble-one absolute left-2 top-2 h-4 w-4 rounded-full border border-white/70 bg-[#a8e6cf]/55" />
+      <span className="patrick-bubble patrick-bubble-two absolute right-0 top-8 h-2.5 w-2.5 rounded-full border border-white/70 bg-[#a8e6cf]/70" />
+      <span className="patrick-sparkle absolute right-4 top-1 text-lg text-[#ffd56a]">
+        ✦
+      </span>
+      <span className="patrick-shadow absolute bottom-1 left-1/2 h-3 w-20 -translate-x-1/2 rounded-[50%] bg-[#b98575]/15 blur-[2px]" />
+      <Image
+        src="/assets/patrick-job-mascot-v2.png"
+        alt="신나게 두 팔을 든 분홍 불가사리 취뽀 마스코트"
+        width={256}
+        height={280}
+        className="patrick-character relative z-10 h-full w-full object-contain drop-shadow-[0_10px_12px_rgba(255,120,154,.24)]"
       />
     </div>
   );
