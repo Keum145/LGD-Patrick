@@ -216,6 +216,16 @@ h3,
   animation: patrickBob 3.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   transition: filter 260ms ease;
 }
+.patrick-giphy {
+  border-radius: 24px;
+  object-position: 48% 50%;
+  mask-image: radial-gradient(
+    ellipse 78% 82% at 50% 50%,
+    #000 58%,
+    rgba(0, 0, 0, 0.82) 72%,
+    transparent 100%
+  );
+}
 .patrick-scene:hover .patrick-character {
   filter: saturate(1.1) brightness(1.03);
   animation: patrickHello 760ms cubic-bezier(0.22, 0.8, 0.28, 1) both;

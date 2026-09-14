@@ -9,6 +9,23 @@ alter table public.user_workspaces enable row level security;
 revoke all on table public.user_workspaces from anon;
 grant select, insert, update, delete on table public.user_workspaces to authenticated;
 
+create table if not exists public.certification_cache (
+  cache_key text primary key,
+  normalized_name text not null,
+  source text not null,
+  data jsonb not null,
+  fetched_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+create index if not exists certification_cache_expires_at_idx
+on public.certification_cache (expires_at);
+
+alter table public.certification_cache enable row level security;
+
+revoke all on table public.certification_cache from anon, authenticated;
+grant all on table public.certification_cache to service_role;
+
 drop policy if exists "Users can read their own workspace" on public.user_workspaces;
 create policy "Users can read their own workspace"
 on public.user_workspaces for select

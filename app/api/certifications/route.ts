@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { serverSupabase } from "../../../lib/supabase-server";
 
 type KdataEvent = {
   pgsggb?: string;
@@ -9,6 +10,22 @@ type KdataEvent = {
   title2?: string;
   examoprSeq?: number;
   url?: string;
+};
+
+type CertificationResponse = {
+  found: boolean;
+  name: string;
+  provider: string;
+  category: string;
+  recommendation: string;
+  sourceUrl: string;
+  scheduleNotice: string;
+  sessions: Array<{
+    id: string;
+    label: string;
+    schedules: Array<{ label: string; start: string; end?: string }>;
+  }>;
+  note: string;
 };
 
 const normalize = (value: string) =>
@@ -99,6 +116,24 @@ export async function POST(request: NextRequest) {
     );
     const start = new Date(`${year}-01-01T00:00:00+09:00`).getTime();
     const end = new Date(`${year + 1}-12-31T23:59:59+09:00`).getTime();
+    const cacheKey = `kdata:${normalize(officialName)}:${year}-${year + 1}`;
+
+    if (serverSupabase) {
+      const { data: cached } = await serverSupabase
+        .from("certification_cache")
+        .select("data, expires_at")
+        .eq("cache_key", cacheKey)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
+
+      if (cached?.data) {
+        return NextResponse.json({
+          ...(cached.data as CertificationResponse),
+          cache: { hit: true },
+        });
+      }
+    }
+
     const response = await fetch(
       `https://www.dataq.or.kr/www/events.dox?start=${start}&end=${end}`,
       {
@@ -145,7 +180,7 @@ export async function POST(request: NextRequest) {
       }))
       .filter((session) => session.schedules.length > 0);
 
-    return NextResponse.json({
+    const result: CertificationResponse = {
       found: sessions.length > 0,
       name: officialName,
       provider: "K-DATA 데이터자격시험",
@@ -162,6 +197,29 @@ export async function POST(request: NextRequest) {
         sessions.length > 0
           ? `${year}년 이후 공식 일정을 불러왔어요.`
           : "현재 공식 홈페이지에 발표된 회차별 일정이 없어요.",
+    };
+
+    let persisted = false;
+    if (serverSupabase) {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      const { error } = await serverSupabase.from("certification_cache").upsert(
+        {
+          cache_key: cacheKey,
+          normalized_name: normalize(officialName),
+          source: "K-DATA",
+          data: result,
+          fetched_at: new Date().toISOString(),
+          expires_at: expiresAt.toISOString(),
+        },
+        { onConflict: "cache_key" },
+      );
+      persisted = !error;
+    }
+
+    return NextResponse.json({
+      ...result,
+      cache: { hit: false, persisted },
     });
   } catch {
     return NextResponse.json(

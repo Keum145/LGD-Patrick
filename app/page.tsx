@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
@@ -653,13 +652,20 @@ function Patrick() {
         ✦
       </span>
       <span className="patrick-shadow absolute bottom-1 left-1/2 h-3 w-20 -translate-x-1/2 rounded-[50%] bg-[#b98575]/15 blur-[2px]" />
-      <Image
-        src="/assets/patrick-job-mascot-v2.png"
-        alt="신나게 두 팔을 든 분홍 불가사리 취뽀 마스코트"
-        width={256}
-        height={280}
-        className="patrick-character relative z-10 h-full w-full object-contain drop-shadow-[0_10px_12px_rgba(255,120,154,.24)]"
+      <img
+        src="https://media.giphy.com/media/8WJw9kAG3wonu/giphy.gif"
+        alt="깃발을 들고 신나 하는 뚱이"
+        className="patrick-character patrick-giphy relative z-10 h-full w-full object-cover drop-shadow-[0_10px_12px_rgba(255,120,154,.24)]"
       />
+      <a
+        href="https://giphy.com/gifs/happy-excited-spongebob-squarepants-8WJw9kAG3wonu"
+        target="_blank"
+        rel="noreferrer"
+        aria-label="GIPHY에서 뚱이 애니메이션 원본 보기"
+        className="absolute bottom-0 right-1 z-20 rounded-full bg-black/35 px-1.5 py-0.5 text-[7px] font-bold text-white/90 backdrop-blur-sm"
+      >
+        via GIPHY
+      </a>
     </div>
   );
 }
@@ -1104,52 +1110,6 @@ export default function Home() {
     setManualTitle("");
     setShowManualListing(false);
     try {
-      const aiResponse = await fetch("/api/ai/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: name }),
-      });
-      const aiData = await aiResponse.json();
-      if (aiResponse.ok && aiData.listings?.length) {
-        const items: JobListing[] = aiData.listings.map(
-          (
-            item: {
-              title: string;
-              url: string;
-              source: string;
-              startDate: string | null;
-              deadline: string | null;
-              confidence: "높음" | "보통" | "낮음";
-              evidence: string;
-            },
-            index: number,
-          ) => ({
-            id: `ai-${index}-${item.url}`,
-            title: item.title,
-            link: item.url,
-            source: item.source,
-            pubDate: item.startDate ?? "",
-            description: item.evidence,
-            detectedDeadline: item.deadline,
-            startDate: item.startDate,
-            confidence: item.confidence,
-          }),
-        );
-        setJobSearch({
-          open: true,
-          company: name,
-          loading: false,
-          items,
-          error: aiData.note ?? "",
-          fallbackUrl: "",
-        });
-        return;
-      }
-
-      const aiError =
-        aiData.code === "MISSING_API_KEY"
-          ? "새 API 키를 .env.local에 넣으면 AI 정밀 검색이 켜집니다. 지금은 무료 검색 결과를 보여드려요."
-          : aiData.error || "AI 검색 결과가 없어 무료 검색으로 전환했어요.";
       const response = await fetch(
         `/api/jobs?company=${encodeURIComponent(name)}`,
       );
@@ -1159,7 +1119,7 @@ export default function Home() {
         company: name,
         loading: false,
         items: data.items ?? [],
-        error: aiError || data.error || "",
+        error: data.error || "",
         fallbackUrl: data.fallbackUrl ?? "",
       });
     } catch {
@@ -1169,7 +1129,7 @@ export default function Home() {
         loading: false,
         items: [],
         error: "검색 중 문제가 생겼어요.",
-        fallbackUrl: `https://news.google.com/search?q=${encodeURIComponent(`${name} 채용 공고`)}&hl=ko&gl=KR&ceid=KR%3Ako`,
+        fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${name}" 채용 (site:jasoseol.com OR site:saramin.co.kr OR site:jobkorea.co.kr OR site:wanted.co.kr OR site:catch.co.kr)`)}`,
       });
     }
   };
@@ -1227,6 +1187,7 @@ export default function Home() {
         }>;
         note?: string;
         error?: string;
+        cache?: { hit?: boolean; persisted?: boolean };
       };
       if (!response.ok)
         throw new Error(data.error || "일정 검색에 실패했어요.");
@@ -1247,8 +1208,7 @@ export default function Home() {
           data.recommendation || "공식 발표된 시험 일정을 불러왔어요.",
         color: matched?.color ?? "#7669c8",
         sourceUrl: data.sourceUrl || matched?.sourceUrl || "",
-        scheduleNotice:
-          data.scheduleNotice || data.note || "공식 일정 검색 결과입니다.",
+        scheduleNotice: `${data.cache?.hit ? "DB에 저장된 일정을 불러왔어요. " : ""}${data.scheduleNotice || data.note || "공식 일정 검색 결과입니다."}`,
         sessions: data.sessions.map((session) => ({
           ...session,
           schedules: session.schedules.map((schedule) => ({
@@ -4432,7 +4392,7 @@ export default function Home() {
                   ‘{jobSearch.company}’ 검색 결과
                 </h2>
                 <p className="mt-1 text-xs text-[#908c84]">
-                  AI가 원문과 마감일 근거를 찾아 정리합니다.
+                  채용 사이트와 공식 채용 페이지 결과를 모아 보여드려요.
                 </p>
               </div>
               <button
@@ -4452,6 +4412,10 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[
                   {
+                    label: "자소설닷컴",
+                    url: "https://jasoseol.com/recruit",
+                  },
+                  {
                     label: "사람인",
                     url: `https://www.saramin.co.kr/zf_user/search/recruit?searchword=${encodeURIComponent(jobSearch.company)}`,
                   },
@@ -4462,10 +4426,6 @@ export default function Home() {
                   {
                     label: "원티드",
                     url: `https://www.wanted.co.kr/search?query=${encodeURIComponent(jobSearch.company)}&tab=position`,
-                  },
-                  {
-                    label: "공식 채용",
-                    url: `https://www.google.com/search?q=${encodeURIComponent(`${jobSearch.company} 공식 채용`)}`,
                   },
                 ].map((source) => (
                   <a
@@ -4574,11 +4534,6 @@ export default function Home() {
                                   마감 {item.detectedDeadline}
                                 </span>
                               )}
-                              {item.confidence && (
-                                <span className="ml-1 mt-2 inline-block rounded-full bg-[#eaf8f3] px-2 py-1 text-[10px] font-extrabold text-[#559b82]">
-                                  AI 신뢰도 {item.confidence}
-                                </span>
-                              )}
                               {item.description && (
                                 <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-[#77736c]">
                                   {item.description}
@@ -4604,7 +4559,7 @@ export default function Home() {
                         바로 표시할 검색 결과가 없어요.
                       </p>
                       <p className="mt-2 text-xs text-[#918d85]">
-                        외부 뉴스 검색에서 공고를 확인할 수 있습니다.
+                        아래 채용 사이트에서 기업명을 바로 검색해 보세요.
                       </p>
                     </div>
                   )}
@@ -4612,13 +4567,13 @@ export default function Home() {
                     <a
                       href={
                         jobSearch.fallbackUrl ||
-                        `https://news.google.com/search?q=${encodeURIComponent(`${jobSearch.company} 채용 공고`)}&hl=ko&gl=KR&ceid=KR%3Ako`
+                        `https://www.google.com/search?q=${encodeURIComponent(`"${jobSearch.company}" 채용 (site:jasoseol.com OR site:saramin.co.kr OR site:jobkorea.co.kr OR site:wanted.co.kr OR site:catch.co.kr)`)}`
                       }
                       target="_blank"
                       rel="noreferrer"
                       className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#ddd8cf] py-3 text-xs font-extrabold"
                     >
-                      Google 뉴스에서 더 보기 <ExternalLink size={14} />
+                      채용 사이트 결과 더 보기 <ExternalLink size={14} />
                     </a>
                   )}
                   {pickedListing && (

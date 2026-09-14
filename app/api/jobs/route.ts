@@ -32,10 +32,21 @@ const normalizePublishedAt = (value: string) => {
 };
 
 const detectDeadline = (text: string, publishedAt: string) => {
+  const fullDate = text.match(/(20\d{2})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})/);
+  if (fullDate) {
+    return `${fullDate[1]}-${fullDate[2].padStart(2, "0")}-${fullDate[3].padStart(2, "0")}`;
+  }
   const match = text.match(/(\d{1,2})월\s*(\d{1,2})일(?:까지|마감)?/);
   if (match) {
     const year = new Date().getFullYear();
     return `${year}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`;
+  }
+  const shortDate = text.match(
+    /(?:~|마감\s*[:：]?\s*)(\d{1,2})[.\/-]\s*(\d{1,2})/,
+  );
+  if (shortDate) {
+    const year = new Date().getFullYear();
+    return `${year}-${shortDate[1].padStart(2, "0")}-${shortDate[2].padStart(2, "0")}`;
   }
   const dayOnly = text.match(/(?:^|\s)(\d{1,2})일까지/);
   if (!dayOnly || !publishedAt) return null;
@@ -61,7 +72,17 @@ const parseFeed = (xml: string, company: string, provider: string) =>
       id: `${provider}-${company}-${index}`,
       title,
       link,
-      source: textOf(item, "source") || hostname || provider,
+      source: hostname.includes("jasoseol.com")
+        ? "자소설닷컴"
+        : hostname.includes("saramin.co.kr")
+          ? "사람인"
+          : hostname.includes("jobkorea.co.kr")
+            ? "잡코리아"
+            : hostname.includes("wanted.co.kr")
+              ? "원티드"
+              : hostname.includes("catch.co.kr")
+                ? "캐치"
+                : textOf(item, "source") || hostname || provider,
       pubDate,
       description: description.slice(0, 180),
       detectedDeadline: detectDeadline(`${title} ${description}`, pubDate),
@@ -78,15 +99,18 @@ export async function GET(request: NextRequest) {
     );
 
   try {
-    const query = encodeURIComponent(`${company} 채용 공고`);
+    const jobSiteQuery = encodeURIComponent(
+      `"${company}" 채용 (site:jasoseol.com OR site:saramin.co.kr OR site:jobkorea.co.kr OR site:wanted.co.kr OR site:catch.co.kr)`,
+    );
+    const officialQuery = encodeURIComponent(`"${company}" 공식 채용 공고`);
     const feeds = [
       {
-        provider: "웹 검색",
-        url: `https://www.bing.com/search?format=rss&q=${query}`,
+        provider: "채용 사이트",
+        url: `https://www.bing.com/search?format=rss&q=${jobSiteQuery}`,
       },
       {
-        provider: "채용 뉴스",
-        url: `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`,
+        provider: "공식 채용",
+        url: `https://www.bing.com/search?format=rss&q=${officialQuery}`,
       },
     ];
     const responses = await Promise.allSettled(
@@ -110,10 +134,22 @@ export async function GET(request: NextRequest) {
           .map((item) => [item.link, item]),
       ).values(),
     );
+    const recruitmentPlatformPattern =
+      /jasoseol\.com|saramin\.co\.kr|jobkorea\.co\.kr|wanted\.co\.kr|catch\.co\.kr/i;
     const officialPattern = /career|careers|recruit|job|채용/i;
+    const today = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Seoul",
+    }).format(new Date());
     const items = unique
+      .filter(
+        (item) =>
+          !item.detectedDeadline ||
+          item.detectedDeadline.localeCompare(today) >= 0,
+      )
       .sort(
         (a, b) =>
+          Number(recruitmentPlatformPattern.test(b.link)) -
+            Number(recruitmentPlatformPattern.test(a.link)) ||
           Number(officialPattern.test(b.link)) -
             Number(officialPattern.test(a.link)) ||
           Number(Boolean(b.detectedDeadline)) -
@@ -127,7 +163,7 @@ export async function GET(request: NextRequest) {
       company,
       items: [],
       error: "실시간 결과를 불러오지 못했습니다.",
-      fallbackUrl: `https://news.google.com/search?q=${encodeURIComponent(`${company} 채용 공고`)}&hl=ko&gl=KR&ceid=KR%3Ako`,
+      fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${company}" 채용 (site:jasoseol.com OR site:saramin.co.kr OR site:jobkorea.co.kr OR site:wanted.co.kr OR site:catch.co.kr)`)}`,
     });
   }
 }
