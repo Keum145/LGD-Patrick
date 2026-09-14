@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
@@ -777,6 +778,8 @@ export default function Home() {
   }>({ open: false, loading: false, error: "", data: null });
   const [tarotQuestion, setTarotQuestion] = useState("");
   const [tarotDeck, setTarotDeck] = useState<TarotChoice[]>([]);
+  const [tarotIsShuffling, setTarotIsShuffling] = useState(false);
+  const tarotShuffleTimerRef = useRef<number | null>(null);
   const [selectedTarotCardIds, setSelectedTarotCardIds] = useState<string[]>(
     [],
   );
@@ -1703,13 +1706,26 @@ export default function Home() {
     }
   };
   const openTarotRoom = () => {
+    if (tarotShuffleTimerRef.current !== null) {
+      window.clearTimeout(tarotShuffleTimerRef.current);
+      tarotShuffleTimerRef.current = null;
+    }
     setTarot({ open: true, loading: false, error: "", data: null });
+    setTarotIsShuffling(false);
     setTarotDeck(shuffleTarotDeck());
     setSelectedTarotCardIds([]);
     setTarotFollowUps([]);
     setTarotFollowUpQuestion("");
     setTarotFollowUpError("");
     setTarotReadingContext(null);
+  };
+  const closeTarotRoom = () => {
+    if (tarotShuffleTimerRef.current !== null) {
+      window.clearTimeout(tarotShuffleTimerRef.current);
+      tarotShuffleTimerRef.current = null;
+    }
+    setTarotIsShuffling(false);
+    setTarot((previous) => ({ ...previous, open: false }));
   };
   const changeTarotTarget = (target: "self" | "other") => {
     setTarotTarget(target);
@@ -1720,16 +1736,22 @@ export default function Home() {
     setTarotReadingContext(null);
   };
   const reshuffleTarotDeck = () => {
+    if (tarot.loading || tarotIsShuffling) return;
     setTarot((previous) => ({ ...previous, error: "", data: null }));
-    setTarotDeck(shuffleTarotDeck());
+    setTarotIsShuffling(true);
     setSelectedTarotCardIds([]);
     setTarotFollowUps([]);
     setTarotFollowUpQuestion("");
     setTarotFollowUpError("");
     setTarotReadingContext(null);
+    tarotShuffleTimerRef.current = window.setTimeout(() => {
+      setTarotDeck(shuffleTarotDeck());
+      setTarotIsShuffling(false);
+      tarotShuffleTimerRef.current = null;
+    }, 720);
   };
   const toggleTarotCard = (cardId: string) => {
-    if (tarot.loading) return;
+    if (tarot.loading || tarotIsShuffling) return;
     setTarot((previous) => ({ ...previous, error: "", data: null }));
     setTarotFollowUps([]);
     setTarotFollowUpError("");
@@ -2265,16 +2287,14 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-5 text-[#31363f] md:px-8 md:py-7">
-      <header className="mx-auto mb-7 flex max-w-[1480px] items-center justify-between">
+    <main className="app-shell min-h-screen px-4 py-5 text-[#31363f] md:px-8 md:py-7">
+      <header className="app-header mx-auto mb-6 flex max-w-[1480px] items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 rotate-[-8deg] items-center justify-center rounded-2xl bg-[#ff85a2] text-2xl shadow-sm">
+          <div className="brand-badge flex h-11 w-11 items-center justify-center rounded-2xl text-2xl">
             ⭐
           </div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-[-.04em] md:text-2xl">
-              뚱이랑 취뽀
-            </h1>
+            <h1 className="brand-title text-xl md:text-2xl">뚱이랑 취뽀</h1>
             <p className="text-xs font-medium text-[#92908a]">
               Patrick's Job Hunt · 느긋하게, 하지만 꾸준히
             </p>
@@ -2327,7 +2347,7 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto mb-4 flex max-w-[1480px] flex-wrap items-center gap-2">
+      <div className="action-dock mx-auto mb-5 flex max-w-[1480px] flex-wrap items-center gap-2">
         <button
           onClick={() => {
             setCertificationPlannerOpen(true);
@@ -2467,7 +2487,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <div className="overflow-hidden rounded-[28px] bg-white paper-shadow">
+          <div className="surface-card overflow-hidden rounded-[28px] bg-white paper-shadow">
             <div className="flex items-center justify-between border-b border-[#f1eee7] px-5 py-5 md:px-7">
               <div className="flex items-center gap-3">
                 <button
@@ -2627,7 +2647,7 @@ export default function Home() {
           )}
         </div>
 
-        <aside className="side-panel rounded-[28px] bg-white p-2 paper-shadow">
+        <aside className="surface-card side-panel rounded-[28px] bg-white p-2 paper-shadow">
           <div className="flex rounded-2xl bg-[#faf8f3] p-1.5">
             <button
               onClick={() => setTab("detail")}
@@ -3468,16 +3488,14 @@ export default function Home() {
         </div>
       )}
       {tarot.open && (
-        <div className="fixed inset-0 z-[105] flex items-center justify-center bg-[#292238]/55 p-4 backdrop-blur-[5px]">
-          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] bg-[#fffdfa] paper-shadow">
-            <div className="relative overflow-hidden border-b border-[#e8e0f6] bg-gradient-to-br from-[#342a52] via-[#57427f] to-[#8869a5] p-6 text-white md:p-7">
+        <div className="tarot-backdrop fixed inset-0 z-[105] flex items-center justify-center bg-[#21192f]/65 p-4 backdrop-blur-[7px]">
+          <div className="tarot-modal flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[32px] bg-[#fffdfa]">
+            <div className="tarot-header relative overflow-hidden border-b border-[#e8e0f6] bg-gradient-to-br from-[#2d2448] via-[#57427f] to-[#9572ad] p-6 text-white md:p-7">
               <div className="absolute -right-4 -top-8 text-9xl opacity-10">
                 🔮
               </div>
               <button
-                onClick={() =>
-                  setTarot((previous) => ({ ...previous, open: false }))
-                }
+                onClick={closeTarotRoom}
                 aria-label="취업 타로 닫기"
                 className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white transition hover:bg-white/25"
               >
@@ -3487,7 +3505,7 @@ export default function Home() {
                 뚱이 옆 비밀 코너 · 잠깐 쉬어가요
               </p>
               <h2 className="mt-1 text-2xl font-extrabold tracking-[-.04em]">
-                30년 타로 선생님의 취업 사주 🔮
+                30년 타로 선생님의 취업 타로 🔮
               </h2>
               <p className="mt-2 max-w-lg text-xs leading-6 text-white/70">
                 답답한 취업 고민을 세 장의 카드로 가볍게 풀어드려요. 결과는
@@ -3511,7 +3529,7 @@ export default function Home() {
                           : "text-[#998ba6]"
                       }`}
                     >
-                      {target === "self" ? "🙋 내 운세" : "👥 다른 사람 운세"}
+                      {target === "self" ? "🙋 내 타로" : "👥 다른 사람 타로"}
                     </button>
                   ))}
                 </div>
@@ -3526,10 +3544,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => {
-                          setTarot((previous) => ({
-                            ...previous,
-                            open: false,
-                          }));
+                          closeTarotRoom();
                           setBirthdayDraft("");
                           setBirthdayModalOpen(true);
                         }}
@@ -3603,11 +3618,13 @@ export default function Home() {
                   className="mt-2 w-full resize-none rounded-2xl border border-[#ded5eb] bg-white px-4 py-3 text-sm leading-6 outline-none placeholder:text-[#b7b0bd] focus:border-[#8d73bd]"
                 />
               </label>
-              <div className="mt-4 rounded-2xl border border-[#ded5eb] bg-[#f8f5fb] p-4">
+              <div className="tarot-deck-stage mt-4 rounded-3xl border border-[#ded5eb] p-4 md:p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-extrabold text-[#625272]">
-                      마음이 가는 카드 3장을 골라주세요
+                      {tarotIsShuffling
+                        ? "카드에 마음을 담아 섞는 중…"
+                        : "마음이 가는 카드 3장을 골라주세요"}
                     </p>
                     <p className="mt-1 text-[10px] text-[#988ca1]">
                       고른 순서대로 현재 · 걸림돌 · 조언 카드가 돼요.
@@ -3616,29 +3633,52 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={reshuffleTarotDeck}
-                    disabled={tarot.loading}
-                    className="shrink-0 rounded-full bg-white px-3 py-2 text-[10px] font-extrabold text-[#725c96] shadow-sm transition hover:bg-[#eee7f7] disabled:opacity-40"
+                    disabled={tarot.loading || tarotIsShuffling}
+                    className="relative z-10 flex shrink-0 items-center gap-1 rounded-full bg-white px-3 py-2 text-[10px] font-extrabold text-[#725c96] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#eee7f7] disabled:opacity-40"
                   >
-                    ↻ 다시 섞기
+                    <span className={tarotIsShuffling ? "animate-spin" : ""}>
+                      ↻
+                    </span>
+                    {tarotIsShuffling ? "섞는 중" : "다시 섞기"}
                   </button>
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
-                  {tarotDeck.map((card) => {
+                <div className="relative z-10 mt-5 grid grid-cols-3 gap-x-2 gap-y-4 sm:grid-cols-5">
+                  {tarotDeck.map((card, index) => {
                     const selectedIndex = selectedTarotCardIds.indexOf(card.id);
                     const selected = selectedIndex >= 0;
+                    const shuffleDirection = index % 2 === 0 ? 1 : -1;
+                    const shuffleX = shuffleDirection * (36 + (index % 3) * 18);
+                    const shuffleRotation =
+                      shuffleDirection * (8 + (index % 3) * 4);
                     return (
                       <button
                         key={card.id}
                         type="button"
                         onClick={() => toggleTarotCard(card.id)}
-                        disabled={tarot.loading}
+                        disabled={tarot.loading || tarotIsShuffling}
+                        style={
+                          {
+                            "--card-index": index,
+                            "--deal-x": `${(4 - index) * -26}px`,
+                            "--deal-r": `${(index - 4) * -4}deg`,
+                            "--shuffle-x": `${shuffleX}px`,
+                            "--shuffle-r": `${shuffleRotation}deg`,
+                            "--shuffle-return-x": `${shuffleX * -0.45}px`,
+                            "--shuffle-return-r": `${shuffleRotation * -0.65}deg`,
+                            "--shuffle-delay": `${(index % 3) * 35}ms`,
+                          } as CSSProperties
+                        }
                         aria-label={
                           selected
                             ? `${selectedIndex + 1}번째 카드 선택 취소`
                             : "타로 카드 선택"
                         }
                         aria-pressed={selected}
-                        className={`relative mx-auto flex h-24 w-16 items-center justify-center overflow-hidden rounded-xl border-2 shadow-sm transition duration-200 sm:h-28 sm:w-[72px] ${
+                        className={`tarot-card-back relative mx-auto flex h-24 w-16 items-center justify-center overflow-hidden rounded-xl border-2 shadow-sm transition duration-200 sm:h-28 sm:w-[72px] ${
+                          tarotIsShuffling
+                            ? "tarot-card-shuffling"
+                            : "tarot-card-deal"
+                        } ${tarot.loading && selected ? "tarot-reading-pulse" : ""} ${
                           selected
                             ? "-translate-y-2 border-[#f2c86d] bg-[#69518f] shadow-lg shadow-[#8066a8]/25"
                             : "border-[#9d84bd] bg-[#4e3d70] hover:-translate-y-1 hover:border-[#d6b4ef]"
@@ -3659,9 +3699,11 @@ export default function Home() {
                   })}
                 </div>
                 <p className="mt-3 text-center text-[10px] font-bold text-[#806f91]">
-                  {selectedTarotCardIds.length < 3
-                    ? `${selectedTarotCardIds.length}/3 선택 · ${3 - selectedTarotCardIds.length}장 더 골라주세요`
-                    : "선택 완료! 이제 카드를 펼쳐볼게요 ✨"}
+                  {tarotIsShuffling
+                    ? "쉿, 카드가 자리를 바꾸고 있어요 ✨"
+                    : selectedTarotCardIds.length < 3
+                      ? `${selectedTarotCardIds.length}/3 선택 · ${3 - selectedTarotCardIds.length}장 더 골라주세요`
+                      : "선택 완료! 이제 카드를 펼쳐볼게요 ✨"}
                 </p>
               </div>
               <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-[#f8f5fb] p-3 text-[10px] leading-5 text-[#877d8e] sm:flex-row sm:items-center sm:justify-between">
@@ -3681,6 +3723,7 @@ export default function Home() {
                 onClick={() => void requestTarotReading()}
                 disabled={
                   tarot.loading ||
+                  tarotIsShuffling ||
                   !tarotQuestion.trim() ||
                   selectedTarotCardIds.length !== 3 ||
                   (tarotTarget === "self"
@@ -3741,7 +3784,8 @@ export default function Home() {
                     {tarot.data.cards.map((card, index) => (
                       <article
                         key={`${card.name}-${index}`}
-                        className="relative overflow-hidden rounded-2xl border border-[#dfd4ee] bg-gradient-to-b from-white to-[#faf7fd] p-4 text-center"
+                        style={{ "--card-index": index } as CSSProperties}
+                        className="tarot-result-card relative overflow-hidden rounded-2xl border border-[#dfd4ee] bg-gradient-to-b from-white to-[#faf7fd] p-4 text-center shadow-sm"
                       >
                         <div className="mx-auto flex h-12 w-10 items-center justify-center rounded-lg border border-[#d8c8ec] bg-[#5b477e] text-xl text-white shadow-sm">
                           {["✦", "☾", "✧"][index]}
