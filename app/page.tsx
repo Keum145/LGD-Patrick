@@ -118,6 +118,47 @@ type TarotReading = {
   luckyHint: string;
   closing: string;
 };
+type TarotChoice = {
+  id: string;
+  name: string;
+  orientation: "정방향" | "역방향";
+};
+
+const tarotMajorArcana = [
+  "광대",
+  "마법사",
+  "여사제",
+  "여황제",
+  "황제",
+  "교황",
+  "연인",
+  "전차",
+  "힘",
+  "은둔자",
+  "운명의 수레바퀴",
+  "정의",
+  "매달린 사람",
+  "죽음",
+  "절제",
+  "악마",
+  "탑",
+  "별",
+  "달",
+  "태양",
+  "심판",
+  "세계",
+] as const;
+
+const shuffleTarotDeck = (): TarotChoice[] =>
+  tarotMajorArcana
+    .map((name) => ({ name, order: Math.random() }))
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 9)
+    .map(({ name }, index) => ({
+      id: `${name}-${Date.now()}-${index}`,
+      name,
+      orientation: Math.random() < 0.5 ? "정방향" : "역방향",
+    }));
 type Experience = [
   tag: string,
   title: string,
@@ -730,6 +771,10 @@ export default function Home() {
     data: TarotReading | null;
   }>({ open: false, loading: false, error: "", data: null });
   const [tarotQuestion, setTarotQuestion] = useState("");
+  const [tarotDeck, setTarotDeck] = useState<TarotChoice[]>([]);
+  const [selectedTarotCardIds, setSelectedTarotCardIds] = useState<string[]>(
+    [],
+  );
 
   useEffect(() => {
     const refreshCurrentDate = () => {
@@ -1631,9 +1676,33 @@ export default function Home() {
       });
     }
   };
+  const openTarotRoom = () => {
+    setTarot({ open: true, loading: false, error: "", data: null });
+    setTarotDeck(shuffleTarotDeck());
+    setSelectedTarotCardIds([]);
+  };
+  const reshuffleTarotDeck = () => {
+    setTarot((previous) => ({ ...previous, error: "", data: null }));
+    setTarotDeck(shuffleTarotDeck());
+    setSelectedTarotCardIds([]);
+  };
+  const toggleTarotCard = (cardId: string) => {
+    if (tarot.loading) return;
+    setTarot((previous) => ({ ...previous, error: "", data: null }));
+    setSelectedTarotCardIds((previous) =>
+      previous.includes(cardId)
+        ? previous.filter((id) => id !== cardId)
+        : previous.length < 3
+          ? [...previous, cardId]
+          : previous,
+    );
+  };
   const requestTarotReading = async () => {
     const question = tarotQuestion.trim();
-    if (!question) return;
+    const selectedCards = selectedTarotCardIds
+      .map((id) => tarotDeck.find((card) => card.id === id))
+      .filter((card): card is TarotChoice => Boolean(card));
+    if (!question || selectedCards.length !== 3) return;
     setTarot((previous) => ({
       ...previous,
       loading: true,
@@ -1649,6 +1718,10 @@ export default function Home() {
           birthday: birthday || undefined,
           company: selectedApplication?.company,
           status: selectedApplication?.status,
+          selectedCards: selectedCards.map(({ name, orientation }) => ({
+            name,
+            orientation,
+          })),
         }),
       });
       const data = await response.json();
@@ -2109,7 +2182,7 @@ export default function Home() {
           )}
         </button>
         <button
-          onClick={() => setTarot((previous) => ({ ...previous, open: true }))}
+          onClick={openTarotRoom}
           className="mr-2 flex items-center gap-1.5 rounded-full border border-[#d8cdf1] bg-[#f3efff] px-3.5 py-2 text-[11px] font-extrabold text-[#6754a8] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#ece5fb]"
         >
           🔮 취업 타로방
@@ -3285,6 +3358,67 @@ export default function Home() {
                   className="mt-2 w-full resize-none rounded-2xl border border-[#ded5eb] bg-white px-4 py-3 text-sm leading-6 outline-none placeholder:text-[#b7b0bd] focus:border-[#8d73bd]"
                 />
               </label>
+              <div className="mt-4 rounded-2xl border border-[#ded5eb] bg-[#f8f5fb] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-extrabold text-[#625272]">
+                      마음이 가는 카드 3장을 골라주세요
+                    </p>
+                    <p className="mt-1 text-[10px] text-[#988ca1]">
+                      고른 순서대로 현재 · 걸림돌 · 조언 카드가 돼요.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={reshuffleTarotDeck}
+                    disabled={tarot.loading}
+                    className="shrink-0 rounded-full bg-white px-3 py-2 text-[10px] font-extrabold text-[#725c96] shadow-sm transition hover:bg-[#eee7f7] disabled:opacity-40"
+                  >
+                    ↻ 다시 섞기
+                  </button>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                  {tarotDeck.map((card) => {
+                    const selectedIndex = selectedTarotCardIds.indexOf(card.id);
+                    const selected = selectedIndex >= 0;
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => toggleTarotCard(card.id)}
+                        disabled={tarot.loading}
+                        aria-label={
+                          selected
+                            ? `${selectedIndex + 1}번째 카드 선택 취소`
+                            : "타로 카드 선택"
+                        }
+                        aria-pressed={selected}
+                        className={`relative mx-auto flex h-24 w-16 items-center justify-center overflow-hidden rounded-xl border-2 shadow-sm transition duration-200 sm:h-28 sm:w-[72px] ${
+                          selected
+                            ? "-translate-y-2 border-[#f2c86d] bg-[#69518f] shadow-lg shadow-[#8066a8]/25"
+                            : "border-[#9d84bd] bg-[#4e3d70] hover:-translate-y-1 hover:border-[#d6b4ef]"
+                        } disabled:cursor-not-allowed`}
+                      >
+                        <span className="absolute inset-1.5 rounded-lg border border-white/25" />
+                        <span className="text-2xl text-[#f0d8ff]">✦</span>
+                        <span className="absolute bottom-2 text-[8px] font-bold tracking-[.18em] text-white/50">
+                          TAROT
+                        </span>
+                        {selected && (
+                          <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#f8f5fb] bg-[#f2c86d] text-[10px] font-black text-[#49385f]">
+                            {selectedIndex + 1}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-center text-[10px] font-bold text-[#806f91]">
+                  {selectedTarotCardIds.length < 3
+                    ? `${selectedTarotCardIds.length}/3 선택 · ${3 - selectedTarotCardIds.length}장 더 골라주세요`
+                    : "선택 완료! 이제 카드를 펼쳐볼게요 ✨"}
+                </p>
+              </div>
               <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-[#f8f5fb] p-3 text-[10px] leading-5 text-[#877d8e] sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   {selectedApplication
@@ -3292,13 +3426,17 @@ export default function Home() {
                     : "지원 상세를 선택하면 현재 회사와 진행 상태도 참고해요."}
                 </span>
                 <span className="shrink-0 font-bold">
-                  질문{birthday ? "·생일·지원 상태" : "·지원 상태"}가 AI에
-                  전달돼요.
+                  질문{birthday ? "·생일·지원 상태" : "·지원 상태"}와 선택한
+                  카드가 AI에 전달돼요.
                 </span>
               </div>
               <button
                 onClick={() => void requestTarotReading()}
-                disabled={tarot.loading || !tarotQuestion.trim()}
+                disabled={
+                  tarot.loading ||
+                  !tarotQuestion.trim() ||
+                  selectedTarotCardIds.length !== 3
+                }
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4e3d70] py-3.5 text-sm font-extrabold text-white transition hover:bg-[#5d4985] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {tarot.loading ? (
@@ -3308,7 +3446,9 @@ export default function Home() {
                 )}
                 {tarot.loading
                   ? "30년 내공으로 카드를 읽는 중…"
-                  : "세 장의 카드 펼치기"}
+                  : selectedTarotCardIds.length === 3
+                    ? "내가 고른 세 장 펼치기"
+                    : "카드 3장을 먼저 골라주세요"}
               </button>
               <details className="mt-3 rounded-xl border border-dashed border-[#d9d0e5] bg-[#fbf9fd] px-3 py-2.5 text-[10px] leading-5 text-[#817888]">
                 <summary className="cursor-pointer font-extrabold text-[#6b5a7c]">

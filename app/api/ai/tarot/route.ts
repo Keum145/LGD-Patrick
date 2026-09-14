@@ -18,6 +18,31 @@ type TarotReading = {
   closing: string;
 };
 
+const tarotCardNames = new Set([
+  "광대",
+  "마법사",
+  "여사제",
+  "여황제",
+  "황제",
+  "교황",
+  "연인",
+  "전차",
+  "힘",
+  "은둔자",
+  "운명의 수레바퀴",
+  "정의",
+  "매달린 사람",
+  "죽음",
+  "절제",
+  "악마",
+  "탑",
+  "별",
+  "달",
+  "태양",
+  "심판",
+  "세계",
+]);
+
 const schema = {
   type: "object",
   additionalProperties: false,
@@ -69,6 +94,10 @@ export async function POST(request: NextRequest) {
       birthday?: string;
       company?: string;
       status?: string;
+      selectedCards?: Array<{
+        name?: string;
+        orientation?: string;
+      }>;
     };
     const question = body.question?.trim().slice(0, 500);
     if (!question) {
@@ -77,15 +106,37 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const selectedCards = body.selectedCards?.map((card) => ({
+      name: card.name?.trim() || "",
+      orientation: card.orientation,
+    }));
+    const validCards =
+      selectedCards?.length === 3 &&
+      new Set(selectedCards.map((card) => card.name)).size === 3 &&
+      selectedCards.every(
+        (card) =>
+          tarotCardNames.has(card.name) &&
+          (card.orientation === "정방향" || card.orientation === "역방향"),
+      );
+    if (!selectedCards || !validCards) {
+      return NextResponse.json(
+        { error: "서로 다른 타로 카드 3장을 먼저 골라주세요." },
+        { status: 400 },
+      );
+    }
 
     const result = await createStructuredResponse<TarotReading>({
       name: "career_tarot_reading",
       maxOutputTokens: 1400,
       instructions:
-        "당신은 경력 30년의 다정하고 유쾌한 한국어 타로 상담가다. 실제 타로 덱에서 서로 다른 카드 3장을 골라 현재·방해물·조언의 흐름으로 해석한다. 점술은 재미와 자기성찰을 위한 비유임을 전제로 하며 합격, 불합격, 연락 시점, 연봉 등을 확정적으로 예언하지 않는다. 불안을 조장하거나 의존을 유도하지 않고, 사용자가 통제할 수 있는 현실적인 취업 준비 행동으로 연결한다. 질문에 직접 답하되 따뜻하고 재치 있게 작성한다. 생일은 분위기를 맞추는 참고 정보일 뿐 성격이나 운명을 단정하는 근거로 쓰지 않는다.",
+        "당신은 경력 30년의 다정하고 유쾌한 한국어 타로 상담가다. 사용자가 직접 고른 서로 다른 카드 3장을 제시된 순서와 정·역방향 그대로 현재·걸림돌·조언의 흐름으로 해석한다. 다른 카드로 교체하거나 방향을 바꾸지 않는다. 점술은 재미와 자기성찰을 위한 비유임을 전제로 하며 합격, 불합격, 연락 시점, 연봉 등을 확정적으로 예언하지 않는다. 불안을 조장하거나 의존을 유도하지 않고, 사용자가 통제할 수 있는 현실적인 취업 준비 행동으로 연결한다. 질문에 직접 답하되 따뜻하고 재치 있게 작성한다. 생일은 분위기를 맞추는 참고 정보일 뿐 성격이나 운명을 단정하는 근거로 쓰지 않는다.",
       input: JSON.stringify({
-        request: "취업 고민을 3장 타로 리딩으로 풀어줘.",
+        request: "내가 직접 고른 3장으로 취업 고민을 리딩해줘.",
         question,
+        selectedCards: selectedCards.map((card, index) => ({
+          position: ["현재", "걸림돌", "조언"][index],
+          ...card,
+        })),
         birthday: body.birthday?.slice(0, 10) || "입력하지 않음",
         currentApplication: body.company
           ? {
@@ -97,7 +148,16 @@ export async function POST(request: NextRequest) {
       schema,
     });
 
-    return NextResponse.json({ ...result, model: "gpt-5.4-nano" });
+    return NextResponse.json({
+      ...result,
+      cards: selectedCards.map((card, index) => ({
+        ...result.cards[index],
+        position: ["현재", "걸림돌", "조언"][index],
+        name: card.name,
+        orientation: card.orientation,
+      })),
+      model: "gpt-5.4-nano",
+    });
   } catch (error) {
     const missingKey = error instanceof OpenAIConfigError;
     return NextResponse.json(
