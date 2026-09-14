@@ -123,6 +123,10 @@ type TarotChoice = {
   name: string;
   orientation: "정방향" | "역방향";
 };
+type TarotFollowUpMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
 
 const tarotMajorArcana = [
   "광대",
@@ -658,6 +662,7 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authForm, setAuthForm] = useState({
     name: "",
+    birthday: "",
     email: "",
     password: "",
   });
@@ -775,6 +780,22 @@ export default function Home() {
   const [selectedTarotCardIds, setSelectedTarotCardIds] = useState<string[]>(
     [],
   );
+  const [tarotTarget, setTarotTarget] = useState<"self" | "other">("self");
+  const [otherTarotPerson, setOtherTarotPerson] = useState({
+    name: "",
+    birthday: "",
+  });
+  const [tarotFollowUpQuestion, setTarotFollowUpQuestion] = useState("");
+  const [tarotFollowUps, setTarotFollowUps] = useState<TarotFollowUpMessage[]>(
+    [],
+  );
+  const [tarotFollowUpLoading, setTarotFollowUpLoading] = useState(false);
+  const [tarotFollowUpError, setTarotFollowUpError] = useState("");
+  const [tarotReadingContext, setTarotReadingContext] = useState<{
+    question: string;
+    targetName: string;
+    birthday: string;
+  } | null>(null);
 
   useEffect(() => {
     const refreshCurrentDate = () => {
@@ -922,9 +943,14 @@ export default function Home() {
       if (workspace.customCertifications)
         setCustomCertifications(workspace.customCertifications);
       if (workspace.experiences) setExperiences(workspace.experiences);
-      if (workspace.birthday) {
-        setBirthday(workspace.birthday);
-        setBirthdayDraft(workspace.birthday);
+      const metadataBirthday = authUser.user_metadata.birth_date;
+      const savedBirthday =
+        workspace.birthday ||
+        (typeof metadataBirthday === "string" ? metadataBirthday : "");
+      if (savedBirthday) {
+        workspace.birthday = savedBirthday;
+        setBirthday(savedBirthday);
+        setBirthdayDraft(savedBirthday);
       }
       setJobDataReady(true);
       setSyncState("saved");
@@ -1680,15 +1706,34 @@ export default function Home() {
     setTarot({ open: true, loading: false, error: "", data: null });
     setTarotDeck(shuffleTarotDeck());
     setSelectedTarotCardIds([]);
+    setTarotFollowUps([]);
+    setTarotFollowUpQuestion("");
+    setTarotFollowUpError("");
+    setTarotReadingContext(null);
+  };
+  const changeTarotTarget = (target: "self" | "other") => {
+    setTarotTarget(target);
+    setTarot((previous) => ({ ...previous, error: "", data: null }));
+    setTarotFollowUps([]);
+    setTarotFollowUpQuestion("");
+    setTarotFollowUpError("");
+    setTarotReadingContext(null);
   };
   const reshuffleTarotDeck = () => {
     setTarot((previous) => ({ ...previous, error: "", data: null }));
     setTarotDeck(shuffleTarotDeck());
     setSelectedTarotCardIds([]);
+    setTarotFollowUps([]);
+    setTarotFollowUpQuestion("");
+    setTarotFollowUpError("");
+    setTarotReadingContext(null);
   };
   const toggleTarotCard = (cardId: string) => {
     if (tarot.loading) return;
     setTarot((previous) => ({ ...previous, error: "", data: null }));
+    setTarotFollowUps([]);
+    setTarotFollowUpError("");
+    setTarotReadingContext(null);
     setSelectedTarotCardIds((previous) =>
       previous.includes(cardId)
         ? previous.filter((id) => id !== cardId)
@@ -1699,10 +1744,22 @@ export default function Home() {
   };
   const requestTarotReading = async () => {
     const question = tarotQuestion.trim();
+    const targetBirthday =
+      tarotTarget === "self" ? birthday : otherTarotPerson.birthday;
+    const targetName =
+      tarotTarget === "self"
+        ? (authUser?.user_metadata.display_name as string | undefined) || "본인"
+        : otherTarotPerson.name.trim();
     const selectedCards = selectedTarotCardIds
       .map((id) => tarotDeck.find((card) => card.id === id))
       .filter((card): card is TarotChoice => Boolean(card));
-    if (!question || selectedCards.length !== 3) return;
+    if (
+      !question ||
+      selectedCards.length !== 3 ||
+      !targetBirthday ||
+      (tarotTarget === "other" && !targetName)
+    )
+      return;
     setTarot((previous) => ({
       ...previous,
       loading: true,
@@ -1715,9 +1772,13 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question,
-          birthday: birthday || undefined,
-          company: selectedApplication?.company,
-          status: selectedApplication?.status,
+          birthday: targetBirthday,
+          readingTarget: tarotTarget,
+          targetName,
+          company:
+            tarotTarget === "self" ? selectedApplication?.company : undefined,
+          status:
+            tarotTarget === "self" ? selectedApplication?.status : undefined,
           selectedCards: selectedCards.map(({ name, orientation }) => ({
             name,
             orientation,
@@ -1728,6 +1789,14 @@ export default function Home() {
       if (!response.ok)
         throw new Error(data.error || "타로 카드를 펼치지 못했어요.");
       setTarot({ open: true, loading: false, error: "", data });
+      setTarotFollowUps([]);
+      setTarotFollowUpQuestion("");
+      setTarotFollowUpError("");
+      setTarotReadingContext({
+        question,
+        targetName,
+        birthday: targetBirthday,
+      });
     } catch (error) {
       setTarot({
         open: true,
@@ -1738,6 +1807,60 @@ export default function Home() {
             : "타로 카드를 펼치지 못했어요.",
         data: null,
       });
+    }
+  };
+  const requestTarotFollowUp = async () => {
+    const question = tarotFollowUpQuestion.trim();
+    if (
+      !question ||
+      !tarot.data ||
+      !tarotReadingContext ||
+      tarotFollowUpLoading
+    )
+      return;
+    const nextUserMessage: TarotFollowUpMessage = {
+      role: "user",
+      text: question,
+    };
+    setTarotFollowUps((previous) => [...previous, nextUserMessage]);
+    setTarotFollowUpQuestion("");
+    setTarotFollowUpLoading(true);
+    setTarotFollowUpError("");
+    try {
+      const response = await fetch("/api/ai/tarot/follow-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          originalQuestion: tarotReadingContext.question,
+          targetName: tarotReadingContext.targetName,
+          birthday: tarotReadingContext.birthday,
+          reading: tarot.data,
+          previousMessages: tarotFollowUps.slice(-6),
+        }),
+      });
+      const data = (await response.json()) as {
+        answer?: string;
+        closing?: string;
+        error?: string;
+      };
+      if (!response.ok || !data.answer)
+        throw new Error(data.error || "후속 답변을 불러오지 못했어요.");
+      setTarotFollowUps((previous) => [
+        ...previous,
+        {
+          role: "assistant",
+          text: `${data.answer}${data.closing ? `\n\n${data.closing}` : ""}`,
+        },
+      ]);
+    } catch (error) {
+      setTarotFollowUpError(
+        error instanceof Error
+          ? error.message
+          : "후속 답변을 불러오지 못했어요.",
+      );
+    } finally {
+      setTarotFollowUpLoading(false);
     }
   };
   const submitAuth = async () => {
@@ -1751,6 +1874,11 @@ export default function Home() {
         setAuthLoading(false);
         return;
       }
+      if (!authForm.birthday) {
+        setAuthError("생년월일을 입력해 주세요.");
+        setAuthLoading(false);
+        return;
+      }
       if (authForm.password.length < 6) {
         setAuthError("비밀번호는 6자 이상으로 만들어 주세요.");
         setAuthLoading(false);
@@ -1760,7 +1888,10 @@ export default function Home() {
         email: authForm.email.trim(),
         password: authForm.password,
         options: {
-          data: { display_name: authForm.name.trim() },
+          data: {
+            display_name: authForm.name.trim(),
+            birth_date: authForm.birthday,
+          },
           emailRedirectTo: window.location.origin,
         },
       });
@@ -1829,8 +1960,19 @@ export default function Home() {
     : patrickMessages;
   const activePatrickMessage =
     dailyMessages[patrickMessageIndex % dailyMessages.length];
-  const saveBirthday = () => {
+  const saveBirthday = async () => {
     if (!birthdayDraft) return;
+    if (supabase && authUser) {
+      const { error } = await supabase.auth.updateUser({
+        data: { birth_date: birthdayDraft },
+      });
+      if (error) {
+        setAuthError(
+          "생일을 계정에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.",
+        );
+        return;
+      }
+    }
     setBirthday(birthdayDraft);
     setPatrickMessageIndex(0);
     setBirthdayModalOpen(false);
@@ -1978,20 +2120,40 @@ export default function Home() {
             </p>
             <div className="mt-6 space-y-3">
               {authMode === "signup" && (
-                <label className="block text-xs font-extrabold text-[#6f6a63]">
-                  이름
-                  <input
-                    value={authForm.name}
-                    onChange={(event) =>
-                      setAuthForm((prev) => ({
-                        ...prev,
-                        name: event.target.value,
-                      }))
-                    }
-                    placeholder="뚱이"
-                    className="mt-1.5 w-full rounded-2xl border border-[#e5dfd6] bg-[#fffdfa] px-4 py-3 text-sm outline-none focus:border-[#ff85a2]"
-                  />
-                </label>
+                <>
+                  <label className="block text-xs font-extrabold text-[#6f6a63]">
+                    이름
+                    <input
+                      value={authForm.name}
+                      onChange={(event) =>
+                        setAuthForm((prev) => ({
+                          ...prev,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="뚱이"
+                      className="mt-1.5 w-full rounded-2xl border border-[#e5dfd6] bg-[#fffdfa] px-4 py-3 text-sm outline-none focus:border-[#ff85a2]"
+                    />
+                  </label>
+                  <label className="block text-xs font-extrabold text-[#6f6a63]">
+                    생년월일
+                    <input
+                      type="date"
+                      value={authForm.birthday}
+                      max={todayKey}
+                      onChange={(event) =>
+                        setAuthForm((prev) => ({
+                          ...prev,
+                          birthday: event.target.value,
+                        }))
+                      }
+                      className="mt-1.5 w-full rounded-2xl border border-[#e5dfd6] bg-[#fffdfa] px-4 py-3 text-sm outline-none focus:border-[#ff85a2]"
+                    />
+                    <span className="mt-1.5 block text-[9px] font-medium leading-4 text-[#a49d94]">
+                      오늘의 운세와 타로에 사용되며 내 계정에만 저장돼요.
+                    </span>
+                  </label>
+                </>
               )}
               <label className="block text-xs font-extrabold text-[#6f6a63]">
                 이메일
@@ -2055,7 +2217,8 @@ export default function Home() {
                 authLoading ||
                 !authForm.email.trim() ||
                 !authForm.password ||
-                (authMode === "signup" && !authForm.name.trim())
+                (authMode === "signup" &&
+                  (!authForm.name.trim() || !authForm.birthday))
               }
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff85a2] py-3.5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -3332,7 +3495,89 @@ export default function Home() {
               </p>
             </div>
             <div className="overflow-y-auto p-5 md:p-7">
-              <div className="flex flex-wrap gap-1.5">
+              <div className="rounded-2xl border border-[#ded5eb] bg-white p-4">
+                <p className="text-xs font-extrabold text-[#625272]">
+                  누구의 흐름을 볼까요?
+                </p>
+                <div className="mt-3 grid grid-cols-2 rounded-xl bg-[#f3eef8] p-1">
+                  {(["self", "other"] as const).map((target) => (
+                    <button
+                      key={target}
+                      type="button"
+                      onClick={() => changeTarotTarget(target)}
+                      className={`rounded-lg py-2.5 text-xs font-extrabold transition ${
+                        tarotTarget === target
+                          ? "bg-white text-[#594274] shadow-sm"
+                          : "text-[#998ba6]"
+                      }`}
+                    >
+                      {target === "self" ? "🙋 내 운세" : "👥 다른 사람 운세"}
+                    </button>
+                  ))}
+                </div>
+                {tarotTarget === "self" ? (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[#f8f5fb] px-3 py-2.5 text-[10px] text-[#776b81]">
+                    <span>
+                      {birthday
+                        ? `계정 생일 ${birthday.replaceAll("-", ".")}을 참고해요.`
+                        : "계정에 등록된 생일이 없어요."}
+                    </span>
+                    {!birthday && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTarot((previous) => ({
+                            ...previous,
+                            open: false,
+                          }));
+                          setBirthdayDraft("");
+                          setBirthdayModalOpen(true);
+                        }}
+                        className="shrink-0 font-extrabold text-[#72549a] underline"
+                      >
+                        생일 등록하기
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="text-[10px] font-extrabold text-[#776b81]">
+                      상대방 이름 또는 별명
+                      <input
+                        value={otherTarotPerson.name}
+                        onChange={(event) =>
+                          setOtherTarotPerson((previous) => ({
+                            ...previous,
+                            name: event.target.value.slice(0, 30),
+                          }))
+                        }
+                        placeholder="예: 취준 메이트"
+                        className="mt-1.5 w-full rounded-xl border border-[#ded5eb] bg-[#fffdfa] px-3 py-2.5 text-xs outline-none focus:border-[#8d73bd]"
+                      />
+                    </label>
+                    <label className="text-[10px] font-extrabold text-[#776b81]">
+                      상대방 생년월일
+                      <input
+                        type="date"
+                        value={otherTarotPerson.birthday}
+                        max={todayKey}
+                        onChange={(event) =>
+                          setOtherTarotPerson((previous) => ({
+                            ...previous,
+                            birthday: event.target.value,
+                          }))
+                        }
+                        className="mt-1.5 w-full rounded-xl border border-[#ded5eb] bg-[#fffdfa] px-3 py-2.5 text-xs outline-none focus:border-[#8d73bd]"
+                      />
+                    </label>
+                    <p className="sm:col-span-2 text-[9px] leading-4 text-[#a07882]">
+                      상대방의 동의를 받고 입력해 주세요. 이 정보는 계정에
+                      저장하지 않고 이번 리딩과 후속 질문에만 사용해요.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
                 {[
                   "이번 지원에서 내가 놓치고 있는 점은?",
                   "요즘 서류가 잘 안 풀리는 이유는?",
@@ -3421,12 +3666,14 @@ export default function Home() {
               </div>
               <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-[#f8f5fb] p-3 text-[10px] leading-5 text-[#877d8e] sm:flex-row sm:items-center sm:justify-between">
                 <span>
-                  {selectedApplication
-                    ? `현재 선택: ${selectedApplication.company} · ${selectedApplication.status}`
-                    : "지원 상세를 선택하면 현재 회사와 진행 상태도 참고해요."}
+                  {tarotTarget === "other"
+                    ? `${otherTarotPerson.name.trim() || "상대방"}의 흐름으로 카드를 읽어요.`
+                    : selectedApplication
+                      ? `현재 선택: ${selectedApplication.company} · ${selectedApplication.status}`
+                      : "지원 상세를 선택하면 현재 회사와 진행 상태도 참고해요."}
                 </span>
                 <span className="shrink-0 font-bold">
-                  질문{birthday ? "·생일·지원 상태" : "·지원 상태"}와 선택한
+                  질문·생일{tarotTarget === "self" ? "·지원 상태" : ""}와 선택한
                   카드가 AI에 전달돼요.
                 </span>
               </div>
@@ -3435,7 +3682,11 @@ export default function Home() {
                 disabled={
                   tarot.loading ||
                   !tarotQuestion.trim() ||
-                  selectedTarotCardIds.length !== 3
+                  selectedTarotCardIds.length !== 3 ||
+                  (tarotTarget === "self"
+                    ? !birthday
+                    : !otherTarotPerson.name.trim() ||
+                      !otherTarotPerson.birthday)
                 }
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4e3d70] py-3.5 text-sm font-extrabold text-white transition hover:bg-[#5d4985] disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -3446,9 +3697,15 @@ export default function Home() {
                 )}
                 {tarot.loading
                   ? "30년 내공으로 카드를 읽는 중…"
-                  : selectedTarotCardIds.length === 3
-                    ? "내가 고른 세 장 펼치기"
-                    : "카드 3장을 먼저 골라주세요"}
+                  : !birthday && tarotTarget === "self"
+                    ? "계정 생일을 먼저 등록해 주세요"
+                    : tarotTarget === "other" &&
+                        (!otherTarotPerson.name.trim() ||
+                          !otherTarotPerson.birthday)
+                      ? "상대방 이름과 생일을 입력해 주세요"
+                      : selectedTarotCardIds.length === 3
+                        ? "내가 고른 세 장 펼치기"
+                        : "카드 3장을 먼저 골라주세요"}
               </button>
               <details className="mt-3 rounded-xl border border-dashed border-[#d9d0e5] bg-[#fbf9fd] px-3 py-2.5 text-[10px] leading-5 text-[#817888]">
                 <summary className="cursor-pointer font-extrabold text-[#6b5a7c]">
@@ -3534,6 +3791,75 @@ export default function Home() {
                     <span>🍀 {tarot.data.luckyHint}</span>
                     <span className="font-extrabold">{tarot.data.closing}</span>
                   </div>
+                  <div className="rounded-2xl border border-[#dfd4ee] bg-[#faf7fd] p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-extrabold text-[#674e87]">
+                          카드에 더 물어보기
+                        </p>
+                        <p className="mt-1 text-[10px] text-[#95889f]">
+                          같은 세 장의 카드와 첫 해석을 이어서 답해요.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-[#eee7f7] px-2 py-1 text-[9px] font-bold text-[#725c96]">
+                        후속 질문
+                      </span>
+                    </div>
+                    {tarotFollowUps.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {tarotFollowUps.map((message, index) => (
+                          <div
+                            key={`${message.role}-${index}`}
+                            className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-xs leading-5 ${
+                              message.role === "user"
+                                ? "ml-auto bg-[#5b477e] text-white"
+                                : "bg-white text-[#625a68] shadow-sm"
+                            }`}
+                          >
+                            {message.text}
+                          </div>
+                        ))}
+                        {tarotFollowUpLoading && (
+                          <div className="flex w-fit items-center gap-2 rounded-2xl bg-white px-3 py-2.5 text-[10px] font-bold text-[#806d92] shadow-sm">
+                            <LoaderCircle size={13} className="animate-spin" />
+                            선생님이 같은 카드를 다시 살펴보는 중…
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {tarotFollowUpError && (
+                      <p className="mt-3 rounded-xl bg-[#fff0f3] px-3 py-2 text-[10px] font-bold text-[#bd5d70]">
+                        {tarotFollowUpError}
+                      </p>
+                    )}
+                    <div className="mt-4 flex gap-2">
+                      <input
+                        value={tarotFollowUpQuestion}
+                        onChange={(event) =>
+                          setTarotFollowUpQuestion(
+                            event.target.value.slice(0, 300),
+                          )
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter")
+                            void requestTarotFollowUp();
+                        }}
+                        placeholder="예: 그러면 이번 주에 가장 먼저 할 일은?"
+                        disabled={tarotFollowUpLoading}
+                        className="min-w-0 flex-1 rounded-xl border border-[#ded5eb] bg-white px-3 py-2.5 text-xs outline-none focus:border-[#8d73bd] disabled:opacity-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void requestTarotFollowUp()}
+                        disabled={
+                          tarotFollowUpLoading || !tarotFollowUpQuestion.trim()
+                        }
+                        className="shrink-0 rounded-xl bg-[#5b477e] px-4 text-xs font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        질문
+                      </button>
+                    </div>
+                  </div>
                   <p className="text-center text-[10px] leading-5 text-[#aaa2ad]">
                     타로는 재미와 자기정리를 위한 콘텐츠이며 실제 채용 결과를
                     예측하지 않습니다.
@@ -3575,17 +3901,17 @@ export default function Home() {
                 max={todayKey}
                 onChange={(event) => setBirthdayDraft(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") saveBirthday();
+                  if (event.key === "Enter") void saveBirthday();
                 }}
                 className="mt-2 w-full rounded-2xl border border-[#e5dfd6] bg-[#fffdfa] px-4 py-3 text-sm outline-none focus:border-[#ff85a2]"
               />
             </label>
             <div className="mt-3 rounded-xl bg-[#f7f3ff] px-3 py-2.5 text-[10px] font-bold leading-5 text-[#77709b]">
-              입력한 생일은 이 브라우저에만 저장됩니다. 운세는 재미와 동기부여를
-              위한 콘텐츠예요.
+              입력한 생일은 내 계정의 개인 작업공간에 저장되며 다른 사용자는 볼
+              수 없어요. 운세는 재미와 동기부여를 위한 콘텐츠예요.
             </div>
             <button
-              onClick={saveBirthday}
+              onClick={() => void saveBirthday()}
               disabled={!birthdayDraft}
               className="mt-5 w-full rounded-2xl bg-[#ff85a2] py-3.5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
