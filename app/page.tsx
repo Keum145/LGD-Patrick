@@ -940,7 +940,7 @@ export default function Home() {
     [...certificationCatalog, ...customCertifications].forEach(
       (certification) => certifications.set(certification.id, certification),
     );
-    return [...certifications.values()];
+    return Array.from(certifications.values());
   }, [customCertifications]);
   const certificationEvents = useMemo<CertificationCalendarEvent[]>(
     () =>

@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       grouped.set(round, [...(grouped.get(round) ?? []), event]);
     });
 
-    const sessions = [...grouped.entries()]
+    const sessions = Array.from(grouped.entries())
       .sort(([a], [b]) => Number(a) - Number(b))
       .map(([round, roundEvents]) => ({
         id: `kdata-${normalize(officialName)}-${round}`,
