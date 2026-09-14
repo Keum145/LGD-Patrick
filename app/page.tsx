@@ -421,76 +421,20 @@ const companies: Record<string, { accent: string; dates: string[] }> = {
     dates: ["2026-09-11", "2026-09-21", "2026-09-27", "2026-10-06"],
   },
 };
+const sampleExperienceTitles = new Set([
+  "하이브리드 에너지 하베스팅 소자 연구",
+  "서울대 ISRC 반도체 공정 실습",
+  "성균관대 공정 교육",
+  "Verilog 기반 행렬 곱셈 가속기 및 RISC-toy 시스템 구현",
+  "용산구청 행정인턴 및 명동 의류매장 스태프",
+]);
+const sampleJobIds = new Set(
+  Object.keys(companies).map((company) => `job-${company}`),
+);
+const sampleApplicationIds = new Set(
+  Object.keys(companies).map((company) => `application-${company}`),
+);
 const kinds: EventKind[] = ["서류 시작", "서류 마감", "인적성", "1차 면접"];
-const initialSavedJobs: SavedJob[] = Object.entries(companies).map(
-  ([company, item]) => ({
-    id: `job-${company}`,
-    company,
-    title: `${company} 신입 채용`,
-    link: "",
-    source: "샘플 공고",
-    description: "",
-    deadline: item.dates[1],
-    savedAt: "2026-09-01T00:00:00.000Z",
-  }),
-);
-const initialApplications: Application[] = Object.entries(companies).map(
-  ([company, item]) => ({
-    id: `application-${company}`,
-    jobId: `job-${company}`,
-    company,
-    title: `${company} 신입 채용`,
-    link: "",
-    description: "",
-    deadline: item.dates[1],
-    status: "관심 있음",
-    rejectionReason: "",
-    retrospective: "",
-  }),
-);
-const initialEvents: JobEvent[] = Object.entries(companies).flatMap(
-  ([company, item]) =>
-    item.dates.slice(0, 2).map((date, i) => ({
-      id: `${company}-${i}`,
-      applicationId: `application-${company}`,
-      company,
-      kind: kinds[i],
-      date,
-      color: item.accent,
-    })),
-);
-const initialExperiences: Experience[] = [
-  [
-    "논문",
-    "하이브리드 에너지 하베스팅 소자 연구",
-    "SCIE 'Micromachines' 제3저자",
-    "#ffcad8",
-  ],
-  [
-    "실습",
-    "서울대 ISRC 반도체 공정 실습",
-    "금속 증착, 식각, 포토 참관",
-    "#c8f0df",
-  ],
-  [
-    "교육",
-    "성균관대 공정 교육",
-    "도금, 본딩, Cryo-TEM 등 패키징/분석",
-    "#d9d2ff",
-  ],
-  [
-    "프로젝트",
-    "Verilog 기반 행렬 곱셈 가속기 및 RISC-toy 시스템 구현",
-    "하드웨어 설계 · 시스템 구현",
-    "#ffe6a8",
-  ],
-  [
-    "인턴",
-    "용산구청 행정인턴 및 명동 의류매장 스태프",
-    "데이터 관리 / 고객 응대",
-    "#c9e9f4",
-  ],
-];
 const experienceColors: Record<string, string> = {
   논문: "#ffcad8",
   실습: "#c8f0df",
@@ -679,10 +623,9 @@ export default function Home() {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
-  const [events, setEvents] = useState(initialEvents);
-  const [savedJobs, setSavedJobs] = useState<SavedJob[]>(initialSavedJobs);
-  const [applications, setApplications] =
-    useState<Application[]>(initialApplications);
+  const [events, setEvents] = useState<JobEvent[]>([]);
+  const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [retrospectives, setRetrospectives] = useState<RetrospectiveRecord[]>(
     [],
   );
@@ -711,7 +654,7 @@ export default function Home() {
     certificationCatalog[0].id,
   );
   const [jobDataReady, setJobDataReady] = useState(false);
-  const [selected, setSelected] = useState<JobEvent | null>(initialEvents[1]);
+  const [selected, setSelected] = useState<JobEvent | null>(null);
   const [tab, setTab] = useState<"detail" | "saved" | "shell">("detail");
   const [vaultTab, setVaultTab] = useState<"experiences" | "retrospectives">(
     "experiences",
@@ -745,8 +688,7 @@ export default function Home() {
     "인적성",
   );
   const [manualStageDate, setManualStageDate] = useState("");
-  const [experiences, setExperiences] =
-    useState<Experience[]>(initialExperiences);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
   const [showExperienceModal, setShowExperienceModal] = useState(false);
   const [experienceEditIndex, setExperienceEditIndex] = useState<number | null>(
     null,
@@ -875,6 +817,23 @@ export default function Home() {
           workspace = {};
         }
       }
+
+      // Remove seed data from accounts that used an older version of the app.
+      workspace = {
+        ...workspace,
+        savedJobs: workspace.savedJobs?.filter(
+          (job) => job.source !== "샘플 공고" && !sampleJobIds.has(job.id),
+        ),
+        applications: workspace.applications?.filter(
+          (application) => !sampleApplicationIds.has(application.id),
+        ),
+        events: workspace.events?.filter(
+          (event) => !sampleApplicationIds.has(event.applicationId),
+        ),
+        experiences: workspace.experiences?.filter(
+          ([, title]) => !sampleExperienceTitles.has(title),
+        ),
+      };
 
       if (workspace.savedJobs) setSavedJobs(workspace.savedJobs);
       if (workspace.applications) {
@@ -1633,11 +1592,11 @@ export default function Home() {
     if (!supabase) return;
     await supabase.auth.signOut();
     setJobDataReady(false);
-    setSavedJobs(initialSavedJobs);
-    setApplications(initialApplications);
-    setEvents(initialEvents);
-    setSelected(initialEvents[1]);
-    setExperiences(initialExperiences);
+    setSavedJobs([]);
+    setApplications([]);
+    setEvents([]);
+    setSelected(null);
+    setExperiences([]);
     setRetrospectives([]);
     setCertificationPlans([]);
     setCustomCertifications([]);
@@ -3017,17 +2976,54 @@ export default function Home() {
             </button>
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffedf2] text-2xl">
-                🚨
+                🐚
               </div>
               <div>
                 <p className="text-xs font-extrabold text-[#ff7597]">
-                  오늘의 취뽀 브리핑
+                  처음 오셨다면 이렇게 시작해요
                 </p>
-                <h2 className="text-xl font-extrabold">
-                  놓치면 안 되는 일정이에요
-                </h2>
+                <h2 className="text-xl font-extrabold">내 취뽀 바다 사용법</h2>
               </div>
             </div>
+            <div className="space-y-2">
+              <div className="flex gap-3 rounded-2xl bg-white p-3">
+                <span className="text-lg">🔎</span>
+                <div>
+                  <p className="text-xs font-extrabold">공고를 찾아 기록해요</p>
+                  <p className="mt-1 text-[11px] leading-5 text-[#8f8b83]">
+                    위 검색창에 기업명을 입력하면 채용 공고를 찾고, 스크랩하거나
+                    지원 일정으로 등록할 수 있어요.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 rounded-2xl bg-white p-3">
+                <span className="text-lg">📅</span>
+                <div>
+                  <p className="text-xs font-extrabold">
+                    일정을 한눈에 관리해요
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-[#8f8b83]">
+                    서류 마감, 인적성, 면접 일정을 캘린더에서 확인하고 지원
+                    상태도 단계별로 바꿔 보세요.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 rounded-2xl bg-white p-3">
+                <span className="text-lg">🫧</span>
+                <div>
+                  <p className="text-xs font-extrabold">
+                    경험과 자격증을 모아둬요
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-[#8f8b83]">
+                    조개함에 경험을 저장하면 자소서 소재로 활용할 수 있고,
+                    자격증 레이더에서 시험 일정도 관리할 수 있어요.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <p className="mt-5 mb-2 text-xs font-extrabold text-[#ff7597]">
+              오늘의 일정 브리핑
+            </p>
             {urgentDeadlines.length > 0 ? (
               <div className="space-y-2">
                 {urgentDeadlines.map((event) => {
@@ -3064,13 +3060,20 @@ export default function Home() {
             ) : (
               <div className="rounded-2xl bg-white p-4">
                 <p className="text-sm font-extrabold">
-                  3일 이내 마감은 없어요 🌿
+                  {upcomingDeadlines.length > 0
+                    ? "3일 이내 마감은 없어요 🌿"
+                    : "아직 등록된 일정이 없어요 🌿"}
                 </p>
                 {upcomingDeadlines[0] && (
                   <p className="mt-2 text-xs leading-5 text-[#8f8b83]">
                     다음 일정은 <b>{upcomingDeadlines[0].company}</b> 서류
                     마감으로, {upcomingDeadlines[0].date.replaceAll("-", ".")}
                     까지예요.
+                  </p>
+                )}
+                {upcomingDeadlines.length === 0 && (
+                  <p className="mt-2 text-xs leading-5 text-[#8f8b83]">
+                    검색창에서 관심 기업을 찾아 첫 공고를 등록해 보세요.
                   </p>
                 )}
               </div>
