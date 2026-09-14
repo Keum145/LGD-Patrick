@@ -723,7 +723,7 @@ export default function Home() {
   );
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState(false);
-  const [toastText, setToastText] = useState("제출했다! 이제 햄버거 먹자 🍔");
+  const [toastText, setToastText] = useState("오늘도 한 걸음 잘 해냈어요.");
   const [showWelcome, setShowWelcome] = useState(true);
   const [jobSearch, setJobSearch] = useState<{
     open: boolean;
@@ -1508,11 +1508,11 @@ export default function Home() {
       ),
     );
     if (status === "지원 완료") {
-      setToastText("제출했다! 이제 햄버거 먹자 🍔");
+      setToastText("지원서 제출 완료 · 잠깐 숨 돌리고 다음 일정을 확인해요");
       setToast(true);
       window.setTimeout(() => setToast(false), 3600);
     } else if (status === "최종 합격") {
-      setToastText("취뽀 성공! 뚱이가 춤추고 있어요 ⭐");
+      setToastText("최종 합격 · 정말 멋지게 해냈어요!");
       setToast(true);
       window.setTimeout(() => setToast(false), 3600);
     }
@@ -2414,7 +2414,7 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <div className="relative mb-5 flex min-h-[132px] items-center justify-between overflow-hidden rounded-[28px] bg-[#fffaf0] px-4 py-2 paper-shadow md:px-5">
+          <div className="patrick-banner relative mb-5 flex min-h-[132px] items-center justify-between overflow-hidden rounded-[28px] bg-[#fffaf0] px-4 py-2 paper-shadow md:px-5">
             <div className="absolute -bottom-5 right-24 text-6xl opacity-[.06]">
               🐚
             </div>
@@ -2565,7 +2565,7 @@ export default function Home() {
                 return (
                   <div
                     key={`${date}-${i}`}
-                    className={`min-h-[102px] border-b border-r border-[#f1eee7] p-1.5 md:min-h-[126px] md:p-2 ${!date ? "bg-[#fbfaf7]" : "bg-white"}`}
+                    className={`calendar-day min-h-[102px] border-b border-r border-[#f1eee7] p-1.5 md:min-h-[126px] md:p-2 ${!date ? "bg-[#fbfaf7]" : "bg-white"}`}
                   >
                     <div
                       className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${isToday ? "bg-[#31363f] text-white" : i % 7 === 0 ? "text-[#ff85a2]" : i % 7 === 6 ? "text-[#6dbb9a]" : "text-[#77746e]"}`}
@@ -2648,22 +2648,22 @@ export default function Home() {
         </div>
 
         <aside className="surface-card side-panel rounded-[28px] bg-white p-2 paper-shadow">
-          <div className="flex rounded-2xl bg-[#faf8f3] p-1.5">
+          <div className="panel-tabs flex rounded-2xl bg-[#faf8f3] p-1.5">
             <button
               onClick={() => setTab("detail")}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-3 text-[11px] font-extrabold transition ${tab === "detail" ? "bg-white text-[#31363f] shadow-sm" : "text-[#a4a098]"}`}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-3 text-[11px] font-extrabold transition ${tab === "detail" ? "bg-[#fff0f4] text-[#b95770] shadow-sm" : "text-[#a4a098] hover:bg-white/60"}`}
             >
               <Target size={15} /> 지원 상세
             </button>
             <button
               onClick={() => setTab("saved")}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-3 text-[11px] font-extrabold transition ${tab === "saved" ? "bg-white text-[#31363f] shadow-sm" : "text-[#a4a098]"}`}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-3 text-[11px] font-extrabold transition ${tab === "saved" ? "bg-[#ecfaf5] text-[#3b806a] shadow-sm" : "text-[#a4a098] hover:bg-white/60"}`}
             >
               <Bookmark size={15} /> 공고함
             </button>
             <button
               onClick={() => setTab("shell")}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-3 text-[11px] font-extrabold transition ${tab === "shell" ? "bg-white text-[#31363f] shadow-sm" : "text-[#a4a098]"}`}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-xl py-3 text-[11px] font-extrabold transition ${tab === "shell" ? "bg-[#f3efff] text-[#6955a0] shadow-sm" : "text-[#a4a098] hover:bg-white/60"}`}
             >
               <Shell size={15} /> 조개함
             </button>
@@ -4766,25 +4766,19 @@ export default function Home() {
         </div>
       )}
       {toast && (
-        <div className="fixed bottom-7 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-2xl bg-[#31363f] px-5 py-4 text-sm font-extrabold text-white shadow-xl">
-          <span className="text-xl">🎉</span> {toastText}
-        </div>
-      )}
-      {toast && (
-        <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
-          {Array.from({ length: 28 }, (_, i) => (
-            <i
-              key={i}
-              className="absolute h-3 w-2 animate-bounce rounded-sm"
-              style={{
-                left: `${(i * 37) % 100}%`,
-                top: `${(i * 19) % 80}%`,
-                background: ["#ff85a2", "#a8e6cf", "#edc75a", "#9a8cff"][i % 4],
-                transform: `rotate(${i * 47}deg)`,
-                animationDelay: `${i * 25}ms`,
-              }}
-            />
-          ))}
+        <div className="achievement-toast fixed bottom-7 left-1/2 z-50 flex w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-3.5 text-sm text-[#48434c]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#ffe3ea] to-[#eee9ff] text-[#8b668f] shadow-sm">
+            <Sparkles size={17} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-extrabold tracking-[.12em] text-[#9d829a]">
+              GOOD PROGRESS
+            </p>
+            <p className="mt-0.5 text-xs font-extrabold leading-5">
+              {toastText}
+            </p>
+          </div>
+          <span className="text-lg">⭐</span>
         </div>
       )}
     </main>
