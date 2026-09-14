@@ -105,6 +105,19 @@ type CoverLetterRecommendation = {
   draft: string;
   cautions: string[];
 };
+type TarotReading = {
+  opening: string;
+  cards: Array<{
+    position: string;
+    name: string;
+    orientation: "정방향" | "역방향";
+    message: string;
+  }>;
+  reading: string;
+  actionSteps: string[];
+  luckyHint: string;
+  closing: string;
+};
 type Experience = [
   tag: string,
   title: string,
@@ -640,6 +653,8 @@ export default function Home() {
   const [certificationSearch, setCertificationSearch] = useState("");
   const [certificationHasSearched, setCertificationHasSearched] =
     useState(false);
+  const [certificationLoading, setCertificationLoading] = useState(false);
+  const [certificationError, setCertificationError] = useState("");
   const [showCustomCertificationForm, setShowCustomCertificationForm] =
     useState(false);
   const [customCertificationForm, setCustomCertificationForm] = useState({
@@ -708,6 +723,13 @@ export default function Home() {
     error: string;
     data: CoverLetterRecommendation | null;
   }>({ open: false, loading: false, error: "", data: null });
+  const [tarot, setTarot] = useState<{
+    open: boolean;
+    loading: boolean;
+    error: string;
+    data: TarotReading | null;
+  }>({ open: false, loading: false, error: "", data: null });
+  const [tarotQuestion, setTarotQuestion] = useState("");
 
   useEffect(() => {
     const refreshCurrentDate = () => {
@@ -913,10 +935,13 @@ export default function Home() {
       return d > 0 && d <= total ? dateKey(y, m, d) : null;
     });
   }, [viewDate]);
-  const availableCertifications = useMemo(
-    () => [...certificationCatalog, ...customCertifications],
-    [customCertifications],
-  );
+  const availableCertifications = useMemo(() => {
+    const certifications = new Map<string, CertificationDefinition>();
+    [...certificationCatalog, ...customCertifications].forEach(
+      (certification) => certifications.set(certification.id, certification),
+    );
+    return [...certifications.values()];
+  }, [customCertifications]);
   const certificationEvents = useMemo<CertificationCalendarEvent[]>(
     () =>
       certificationPlans.flatMap((plan) => {
@@ -1068,7 +1093,7 @@ export default function Home() {
     }
   };
   const addCompany = () => searchCompany(query.trim());
-  const searchCertification = (requestedName = certificationSearch) => {
+  const searchCertification = async (requestedName = certificationSearch) => {
     const name = requestedName.trim();
     if (!name) {
       setCertificationHasSearched(false);
@@ -1076,6 +1101,8 @@ export default function Home() {
     }
 
     setCertificationSearch(name);
+    setCertificationHasSearched(true);
+    setCertificationError("");
     const normalizedName = name.toLocaleLowerCase("ko-KR").replaceAll(" ", "");
     const matched = availableCertifications.find((certification) =>
       `${certification.name}${certification.category}${certification.aliases?.join("") ?? ""}`
@@ -1084,32 +1111,86 @@ export default function Home() {
         .includes(normalizedName),
     );
 
-    if (matched) {
+    const isKdataCertification = Boolean(
+      matched?.sourceUrl.includes("dataq.or.kr"),
+    );
+    if (matched?.sessions.length && !isKdataCertification) {
       setSelectedCertificationId(matched.id);
-      setCertificationHasSearched(true);
       return;
     }
 
-    if (normalizedName.endsWith("기사")) {
-      const certificationId = `qnet-${normalizedName}`;
+    if (matched) setSelectedCertificationId(matched.id);
+    setCertificationLoading(true);
+    try {
+      const response = await fetch("/api/certifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = (await response.json()) as {
+        found?: boolean;
+        name?: string;
+        provider?: string;
+        category?: string;
+        recommendation?: string;
+        sourceUrl?: string;
+        scheduleNotice?: string;
+        sessions?: Array<{
+          id: string;
+          label: string;
+          schedules: Array<{
+            label: string;
+            start: string;
+            end: string | null;
+          }>;
+        }>;
+        note?: string;
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(data.error || "일정 검색에 실패했어요.");
+      if (!data.found || !data.sessions?.length) {
+        throw new Error(
+          data.note || "공식 출처에서 발표된 회차별 일정을 찾지 못했어요.",
+        );
+      }
+
+      const certificationId = matched?.id ?? `searched-${normalizedName}`;
       const discovered: CertificationDefinition = {
         id: certificationId,
-        name,
-        category: "Q-Net 국가기술자격",
-        recommendation: "입력한 기사 종목을 Q-Net 정기 기사 일정에 연결했어요.",
-        color: "#7669c8",
-        sourceUrl:
-          "https://www.q-net.or.kr/crf021.do?gSite=Q&id=crf02101&scheType=03",
-        sessions: engineerSessions,
+        name: data.name || name,
+        aliases: Array.from(new Set([...(matched?.aliases ?? []), name])),
+        category:
+          data.category || `${data.provider || "공식 시행기관"} 시험 일정`,
+        recommendation:
+          data.recommendation || "공식 발표된 시험 일정을 불러왔어요.",
+        color: matched?.color ?? "#7669c8",
+        sourceUrl: data.sourceUrl || matched?.sourceUrl || "",
+        scheduleNotice:
+          data.scheduleNotice || data.note || "공식 일정 검색 결과입니다.",
+        sessions: data.sessions.map((session) => ({
+          ...session,
+          schedules: session.schedules.map((schedule) => ({
+            label: schedule.label,
+            start: schedule.start,
+            ...(schedule.end ? { end: schedule.end } : {}),
+          })),
+        })),
       };
-      setCustomCertifications((prev) =>
-        prev.some((item) => item.id === certificationId)
-          ? prev
-          : [...prev, discovered],
-      );
+      setCustomCertifications((previous) => [
+        ...previous.filter((item) => item.id !== certificationId),
+        discovered,
+      ]);
       setSelectedCertificationId(certificationId);
+    } catch (error) {
+      setCertificationError(
+        error instanceof Error
+          ? error.message
+          : "공식 시험일정을 불러오지 못했어요.",
+      );
+    } finally {
+      setCertificationLoading(false);
     }
-    setCertificationHasSearched(true);
   };
   const toggleCertificationPlan = (
     certification: CertificationDefinition,
@@ -1550,6 +1631,42 @@ export default function Home() {
       });
     }
   };
+  const requestTarotReading = async () => {
+    const question = tarotQuestion.trim();
+    if (!question) return;
+    setTarot((previous) => ({
+      ...previous,
+      loading: true,
+      error: "",
+      data: null,
+    }));
+    try {
+      const response = await fetch("/api/ai/tarot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          birthday: birthday || undefined,
+          company: selectedApplication?.company,
+          status: selectedApplication?.status,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "타로 카드를 펼치지 못했어요.");
+      setTarot({ open: true, loading: false, error: "", data });
+    } catch (error) {
+      setTarot({
+        open: true,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "타로 카드를 펼치지 못했어요.",
+        data: null,
+      });
+    }
+  };
   const submitAuth = async () => {
     if (!supabase || !authForm.email.trim() || !authForm.password) return;
     setAuthLoading(true);
@@ -1980,6 +2097,7 @@ export default function Home() {
             setCertificationPlannerOpen(true);
             setCertificationHasSearched(false);
             setCertificationSearch("");
+            setCertificationError("");
           }}
           className="mr-2 flex items-center gap-1.5 rounded-full bg-[#31363f] px-3.5 py-2 text-[11px] font-extrabold text-white shadow-sm transition hover:-translate-y-0.5"
         >
@@ -2060,15 +2178,25 @@ export default function Home() {
               </div>
             </div>
             <div className="relative z-10 ml-2 flex shrink-0 flex-col items-end gap-3">
-              <button
-                onClick={() => {
-                  setBirthdayDraft(birthday);
-                  setBirthdayModalOpen(true);
-                }}
-                className="rounded-full border border-[#eadfd2] bg-white/80 px-2.5 py-1.5 text-[10px] font-extrabold text-[#7d756d] shadow-sm"
-              >
-                {birthday ? "🎂 생일 수정" : "🎂 생일 등록"}
-              </button>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <button
+                  onClick={() => {
+                    setBirthdayDraft(birthday);
+                    setBirthdayModalOpen(true);
+                  }}
+                  className="rounded-full border border-[#eadfd2] bg-white/80 px-2.5 py-1.5 text-[10px] font-extrabold text-[#7d756d] shadow-sm"
+                >
+                  {birthday ? "🎂 생일 수정" : "🎂 생일 등록"}
+                </button>
+                <button
+                  onClick={() =>
+                    setTarot((previous) => ({ ...previous, open: true }))
+                  }
+                  className="rounded-full border border-[#d9cff4] bg-[#f3efff] px-2.5 py-1.5 text-[10px] font-extrabold text-[#6754a8] shadow-sm transition hover:-translate-y-0.5"
+                >
+                  🔮 취업 타로방
+                </button>
+              </div>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() =>
@@ -3107,6 +3235,159 @@ export default function Home() {
           </div>
         </div>
       )}
+      {tarot.open && (
+        <div className="fixed inset-0 z-[105] flex items-center justify-center bg-[#292238]/55 p-4 backdrop-blur-[5px]">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] bg-[#fffdfa] paper-shadow">
+            <div className="relative overflow-hidden border-b border-[#e8e0f6] bg-gradient-to-br from-[#342a52] via-[#57427f] to-[#8869a5] p-6 text-white md:p-7">
+              <div className="absolute -right-4 -top-8 text-9xl opacity-10">
+                🔮
+              </div>
+              <button
+                onClick={() =>
+                  setTarot((previous) => ({ ...previous, open: false }))
+                }
+                aria-label="취업 타로 닫기"
+                className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white transition hover:bg-white/25"
+              >
+                <X size={18} />
+              </button>
+              <p className="text-xs font-extrabold text-[#e5d7ff]">
+                뚱이 옆 비밀 코너 · 잠깐 쉬어가요
+              </p>
+              <h2 className="mt-1 text-2xl font-extrabold tracking-[-.04em]">
+                30년 타로 선생님의 취업 사주 🔮
+              </h2>
+              <p className="mt-2 max-w-lg text-xs leading-6 text-white/70">
+                답답한 취업 고민을 세 장의 카드로 가볍게 풀어드려요. 결과는
+                예언보다 마음을 정리하는 힌트에 가까워요.
+              </p>
+            </div>
+            <div className="overflow-y-auto p-5 md:p-7">
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  "이번 지원에서 내가 놓치고 있는 점은?",
+                  "요즘 서류가 잘 안 풀리는 이유는?",
+                  "면접 전에 무엇을 준비하면 좋을까?",
+                ].map((question) => (
+                  <button
+                    key={question}
+                    onClick={() => setTarotQuestion(question)}
+                    className="rounded-full bg-[#f1ecfb] px-3 py-2 text-[10px] font-extrabold text-[#6b5798] transition hover:bg-[#e9e0f8]"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+              <label className="mt-4 block text-xs font-extrabold text-[#625a6b]">
+                타로 선생님께 물어볼 취업 고민
+                <textarea
+                  value={tarotQuestion}
+                  onChange={(event) => setTarotQuestion(event.target.value)}
+                  placeholder="예: 이번에 지원한 회사와 잘 맞을까요? 지금 보완할 점도 알려주세요."
+                  maxLength={500}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-2xl border border-[#ded5eb] bg-white px-4 py-3 text-sm leading-6 outline-none placeholder:text-[#b7b0bd] focus:border-[#8d73bd]"
+                />
+              </label>
+              <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-[#f8f5fb] p-3 text-[10px] leading-5 text-[#877d8e] sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  {selectedApplication
+                    ? `현재 선택: ${selectedApplication.company} · ${selectedApplication.status}`
+                    : "지원 상세를 선택하면 현재 회사와 진행 상태도 참고해요."}
+                </span>
+                <span className="shrink-0 font-bold">
+                  질문{birthday ? "·생일·지원 상태" : "·지원 상태"}가 AI에
+                  전달돼요.
+                </span>
+              </div>
+              <button
+                onClick={() => void requestTarotReading()}
+                disabled={tarot.loading || !tarotQuestion.trim()}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4e3d70] py-3.5 text-sm font-extrabold text-white transition hover:bg-[#5d4985] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {tarot.loading ? (
+                  <LoaderCircle size={17} className="animate-spin" />
+                ) : (
+                  <Sparkles size={17} className="text-[#e5c8ff]" />
+                )}
+                {tarot.loading
+                  ? "30년 내공으로 카드를 읽는 중…"
+                  : "세 장의 카드 펼치기"}
+              </button>
+              {tarot.error && (
+                <div className="mt-4 rounded-2xl bg-[#fff0f3] p-4 text-center text-xs font-bold leading-5 text-[#bd5d70]">
+                  {tarot.error}
+                </div>
+              )}
+              {tarot.data && !tarot.loading && (
+                <div className="mt-6 space-y-5">
+                  <div className="rounded-2xl bg-[#f5f0fb] p-4 text-sm font-extrabold leading-6 text-[#58476f]">
+                    {tarot.data.opening}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {tarot.data.cards.map((card, index) => (
+                      <article
+                        key={`${card.name}-${index}`}
+                        className="relative overflow-hidden rounded-2xl border border-[#dfd4ee] bg-gradient-to-b from-white to-[#faf7fd] p-4 text-center"
+                      >
+                        <div className="mx-auto flex h-12 w-10 items-center justify-center rounded-lg border border-[#d8c8ec] bg-[#5b477e] text-xl text-white shadow-sm">
+                          {["✦", "☾", "✧"][index]}
+                        </div>
+                        <p className="mt-3 text-[10px] font-extrabold text-[#9279b7]">
+                          {card.position}
+                        </p>
+                        <h3 className="mt-1 text-sm font-extrabold">
+                          {card.name}
+                        </h3>
+                        <span className="mt-1 inline-block rounded-full bg-[#eee7f7] px-2 py-1 text-[9px] font-bold text-[#725c96]">
+                          {card.orientation}
+                        </span>
+                        <p className="mt-3 text-left text-[11px] leading-5 text-[#777079]">
+                          {card.message}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="rounded-2xl border border-[#e7deef] bg-white p-5">
+                    <p className="text-xs font-extrabold text-[#745a9c]">
+                      30년 내공의 한마디
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[#5f5962]">
+                      {tarot.data.reading}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#edf8f4] p-5">
+                    <p className="text-xs font-extrabold text-[#4d9178]">
+                      카드가 권하는 현실 행동 3가지
+                    </p>
+                    <ol className="mt-3 space-y-2">
+                      {tarot.data.actionSteps.map((step, index) => (
+                        <li
+                          key={`${step}-${index}`}
+                          className="flex gap-2 text-xs leading-5 text-[#587269]"
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#67aa92] text-[9px] font-extrabold text-white">
+                            {index + 1}
+                          </span>
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  <div className="flex flex-col gap-2 rounded-2xl bg-[#fff5dd] p-4 text-xs leading-5 text-[#876b35] sm:flex-row sm:items-center sm:justify-between">
+                    <span>🍀 {tarot.data.luckyHint}</span>
+                    <span className="font-extrabold">{tarot.data.closing}</span>
+                  </div>
+                  <p className="text-center text-[10px] leading-5 text-[#aaa2ad]">
+                    타로는 재미와 자기정리를 위한 콘텐츠이며 실제 채용 결과를
+                    예측하지 않습니다.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {birthdayModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#31363f]/45 p-4 backdrop-blur-[4px]">
           <div className="w-full max-w-md rounded-[28px] bg-white p-6 paper-shadow">
@@ -3194,7 +3475,7 @@ export default function Home() {
                       setCertificationHasSearched(false);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") searchCertification();
+                      if (event.key === "Enter") void searchCertification();
                     }}
                     placeholder="예: 빅데이터분석기사"
                     className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[#b8b3aa]"
@@ -3212,13 +3493,20 @@ export default function Home() {
                     </button>
                   )}
                   <button
-                    onClick={() => searchCertification()}
-                    disabled={!certificationSearch.trim()}
+                    onClick={() => void searchCertification()}
+                    disabled={
+                      certificationLoading || !certificationSearch.trim()
+                    }
                     className="shrink-0 rounded-lg bg-[#7669c8] px-3 py-2 text-[10px] font-extrabold text-white disabled:opacity-40"
                   >
-                    검색
+                    {certificationLoading ? "조회 중" : "검색"}
                   </button>
                 </div>
+                {certificationError && (
+                  <p className="mb-3 rounded-xl bg-[#fff3e1] px-3 py-2.5 text-[10px] font-bold leading-5 text-[#9a7537]">
+                    {certificationError}
+                  </p>
+                )}
                 {!certificationHasSearched && (
                   <div className="mb-4">
                     <p className="mb-2 text-[10px] font-bold text-[#aaa49a]">
@@ -3234,7 +3522,7 @@ export default function Home() {
                       ].map((suggestion) => (
                         <button
                           key={suggestion}
-                          onClick={() => searchCertification(suggestion)}
+                          onClick={() => void searchCertification(suggestion)}
                           className="rounded-full bg-[#eeeafd] px-2.5 py-1.5 text-[10px] font-extrabold text-[#6d61bd]"
                         >
                           {suggestion}
@@ -3270,6 +3558,7 @@ export default function Home() {
                     </button>
                   ))}
                   {certificationHasSearched &&
+                    !certificationLoading &&
                     filteredCertifications.length === 0 && (
                       <div className="rounded-xl border border-dashed border-[#ddd7ce] p-3 text-center text-[10px] font-bold leading-5 text-[#9b968d]">
                         ‘{certificationSearch}’의 자동 일정을 찾지 못했어요.
@@ -3288,8 +3577,23 @@ export default function Home() {
                 </button>
               </div>
               <div className="overflow-y-auto p-5 md:p-6">
-                {certificationHasSearched &&
-                filteredCertifications.length > 0 ? (
+                {certificationLoading ? (
+                  <div className="flex min-h-[360px] items-center justify-center">
+                    <div className="text-center">
+                      <LoaderCircle
+                        size={32}
+                        className="mx-auto animate-spin text-[#7669c8]"
+                      />
+                      <h3 className="mt-4 text-sm font-extrabold">
+                        공식 시험일정을 찾고 있어요
+                      </h3>
+                      <p className="mt-2 text-xs text-[#918c84]">
+                        시행기관 자료에서 회차와 날짜를 확인하는 중이에요.
+                      </p>
+                    </div>
+                  </div>
+                ) : certificationHasSearched &&
+                  filteredCertifications.length > 0 ? (
                   <>
                     <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                       <div>
