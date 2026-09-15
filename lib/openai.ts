@@ -24,6 +24,11 @@ export async function createStructuredResponse<T>(options: {
   input: string;
   schema: Record<string, unknown>;
   useWebSearch?: boolean;
+  webSearchLocation?: {
+    country: string;
+    city?: string;
+    region?: string;
+  };
   maxOutputTokens?: number;
 }) {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
@@ -44,7 +49,21 @@ export async function createStructuredResponse<T>(options: {
       instructions: options.instructions,
       input: options.input,
       reasoning: { effort: "none" },
-      tools: options.useWebSearch ? [{ type: "web_search" }] : [],
+      tools: options.useWebSearch
+        ? [
+            {
+              type: "web_search",
+              ...(options.webSearchLocation
+                ? {
+                    user_location: {
+                      type: "approximate",
+                      ...options.webSearchLocation,
+                    },
+                  }
+                : {}),
+            },
+          ]
+        : [],
       text: {
         verbosity: "low",
         format: {

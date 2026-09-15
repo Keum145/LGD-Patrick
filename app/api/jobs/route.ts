@@ -31,6 +31,41 @@ const normalizePublishedAt = (value: string) => {
   ).toUTCString();
 };
 
+const normalizeCompanyName = (value: string) =>
+  value
+    .toLocaleLowerCase("ko-KR")
+    .replace(/㈜|\(주\)|주식회사|[^a-z0-9가-힣]/g, "");
+
+const parseJobKoreaCompanyJobs = (html: string, company: string) => {
+  const decoded = html.replace(/\\"/g, '"').replace(/\\u0026/g, "&");
+  const requestedCompany = normalizeCompanyName(company);
+  const companyPattern =
+    /"name":"([^"]+)"[\s\S]{0,2600}?"jobInfos":\[([\s\S]*?)\]\}/g;
+  const companyMatch = Array.from(decoded.matchAll(companyPattern)).find(
+    (match) => normalizeCompanyName(match[1]) === requestedCompany,
+  );
+  if (!companyMatch) return [];
+
+  const jobPattern =
+    /"jobId":"([^"]+)"[\s\S]*?"title":"([^"]+)"[\s\S]*?"applicationEndAt":"([^"]+)"/g;
+  return Array.from(companyMatch[2].matchAll(jobPattern)).map((match) => {
+    const deadline = match[3].slice(0, 10);
+    const alwaysHiring = Number(deadline.slice(0, 4)) >= 2060;
+    return {
+      id: `jobkorea-${match[1]}`,
+      title: decodeXml(match[2]),
+      link: `https://www.jobkorea.co.kr/Recruit/GI_Read/${match[1]}`,
+      source: "잡코리아",
+      pubDate: "",
+      description: alwaysHiring
+        ? "잡코리아에서 상시채용으로 확인된 공고예요."
+        : "잡코리아 회사별 공고에서 마감일을 확인했어요.",
+      detectedDeadline: alwaysHiring ? null : deadline,
+      provider: "잡코리아 회사 공고",
+    };
+  });
+};
+
 const detectDeadline = (text: string, publishedAt: string) => {
   const fullDate = text.match(/(20\d{2})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})/);
   if (fullDate) {
@@ -99,6 +134,26 @@ export async function GET(request: NextRequest) {
     );
 
   try {
+    let jobKoreaItems: ReturnType<typeof parseJobKoreaCompanyJobs> = [];
+    try {
+      const jobKoreaResponse = await fetch(
+        `https://www.jobkorea.co.kr/Search/?stext=${encodeURIComponent(company)}`,
+        {
+          headers: { "User-Agent": "Mozilla/5.0 PatrickJobHunt/1.0" },
+          next: { revalidate: 1800 },
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      if (jobKoreaResponse.ok) {
+        jobKoreaItems = parseJobKoreaCompanyJobs(
+          await jobKoreaResponse.text(),
+          company,
+        );
+      }
+    } catch {
+      // 잡코리아가 응답하지 않으면 아래 무료 검색 결과로 계속 진행합니다.
+    }
+
     const jobSiteQuery = encodeURIComponent(
       `"${company}" 채용 (site:jasoseol.com OR site:saramin.co.kr OR site:jobkorea.co.kr OR site:wanted.co.kr OR site:catch.co.kr)`,
     );
@@ -124,9 +179,12 @@ export async function GET(request: NextRequest) {
         return parseFeed(await response.text(), company, feed.provider);
       }),
     );
-    const merged = responses.flatMap((result) =>
-      result.status === "fulfilled" ? result.value : [],
-    );
+    const merged = [
+      ...jobKoreaItems,
+      ...responses.flatMap((result) =>
+        result.status === "fulfilled" ? result.value : [],
+      ),
+    ];
     const unique = Array.from(
       new Map(
         merged

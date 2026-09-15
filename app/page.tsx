@@ -1104,7 +1104,7 @@ export default function Home() {
     const normalizedCompany = name
       .toLocaleLowerCase("ko-KR")
       .replace(/[\s._-]+/g, "");
-    const browserCacheKey = `patrick-job-search-v3:${normalizedCompany}`;
+    const browserCacheKey = `patrick-job-search-v4:${normalizedCompany}`;
     setJobSearch({
       open: true,
       company: name,
@@ -1230,7 +1230,7 @@ export default function Home() {
           : "채용 사이트에서 날짜를 찾지 못해 원문 링크만 보여드려요.",
         fallbackUrl: data.fallbackUrl ?? "",
       };
-      if (mergedItems.length) {
+      if (mergedItems.some((item) => item.detectedDeadline)) {
         window.localStorage.setItem(
           browserCacheKey,
           JSON.stringify({
