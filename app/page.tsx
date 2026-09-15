@@ -63,6 +63,14 @@ type JobListing = {
   startDate?: string | null;
   confidence?: "높음" | "보통" | "낮음";
 };
+type CompanyRecommendation = {
+  name: string;
+  sector: string;
+  activeJobCount: number;
+  nearestDeadline: string | null;
+  daysLeft: number | null;
+  sampleTitle: string;
+};
 type SavedJob = {
   id: string;
   company: string;
@@ -809,6 +817,15 @@ export default function Home() {
     fallbackUrl: "",
     source: "sites",
   });
+  const [companyRecommendations, setCompanyRecommendations] = useState<
+    CompanyRecommendation[]
+  >([]);
+  const [companyRecommendationsLoading, setCompanyRecommendationsLoading] =
+    useState(true);
+  const [companyRecommendationsError, setCompanyRecommendationsError] =
+    useState(false);
+  const [companyRecommendationsRefresh, setCompanyRecommendationsRefresh] =
+    useState(0);
   const [pickedListing, setPickedListing] = useState<JobListing | null>(null);
   const [deadline, setDeadline] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -1073,6 +1090,33 @@ export default function Home() {
     experiences,
     jobDataReady,
   ]);
+
+  useEffect(() => {
+    if (!jobDataReady) return;
+    let cancelled = false;
+    const loadCompanyRecommendations = async () => {
+      setCompanyRecommendationsLoading(true);
+      setCompanyRecommendationsError(false);
+      try {
+        const response = await fetch("/api/jobs/recommendations");
+        if (!response.ok) throw new Error("Recommendation request failed");
+        const result = (await response.json()) as {
+          companies?: CompanyRecommendation[];
+        };
+        if (cancelled) return;
+        setCompanyRecommendations(result.companies ?? []);
+        setCompanyRecommendationsError(!(result.companies?.length ?? 0));
+      } catch {
+        if (!cancelled) setCompanyRecommendationsError(true);
+      } finally {
+        if (!cancelled) setCompanyRecommendationsLoading(false);
+      }
+    };
+    void loadCompanyRecommendations();
+    return () => {
+      cancelled = true;
+    };
+  }, [companyRecommendationsRefresh, jobDataReady]);
   const days = useMemo(() => {
     const y = viewDate.getFullYear(),
       m = viewDate.getMonth();
@@ -2523,19 +2567,46 @@ export default function Home() {
         >
           🔮 취업 타로방
         </button>
-        <span className="mr-1 text-[11px] font-extrabold text-[#8f8a82]">
-          빠른 공고 찾기
+        <span className="mr-1 flex items-center gap-1 text-[11px] font-extrabold text-[#8f8a82]">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#64b99d] opacity-50" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4a9d83]" />
+          </span>
+          지금 채용 중
         </span>
-        {["삼성전자", "LG전자", "SK하이닉스", "카카오", "현대자동차"].map(
-          (company) => (
+        {companyRecommendationsLoading ? (
+          <span className="flex items-center gap-1.5 rounded-full border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-bold text-[#9a968e]">
+            <LoaderCircle size={12} className="animate-spin" /> 공고 확인 중
+          </span>
+        ) : companyRecommendations.length > 0 ? (
+          companyRecommendations.map((company) => (
             <button
-              key={company}
-              onClick={() => searchCompany(company)}
-              className="rounded-full border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-extrabold text-[#68655f] shadow-sm transition hover:border-[#ffb6c7] hover:bg-white hover:text-[#ed6f8b]"
+              key={company.name}
+              onClick={() => searchCompany(company.name)}
+              title={`${company.sector} · 채용 공고 ${company.activeJobCount}개 · ${company.nearestDeadline ? `${company.nearestDeadline} 마감` : "상시채용"}\n${company.sampleTitle}`}
+              className="group flex items-center gap-1.5 rounded-full border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-extrabold text-[#68655f] shadow-sm transition hover:-translate-y-0.5 hover:border-[#ffb6c7] hover:bg-white hover:text-[#ed6f8b]"
             >
-              {company}
+              {company.name}
+              <span className="rounded-full bg-[#e8f5ef] px-1.5 py-0.5 text-[9px] text-[#3e8e75] transition group-hover:bg-[#fff0f4] group-hover:text-[#e16481]">
+                {company.daysLeft === null
+                  ? "상시"
+                  : company.daysLeft === 0
+                    ? "오늘 마감"
+                    : `D-${company.daysLeft}`}
+              </span>
             </button>
-          ),
+          ))
+        ) : (
+          companyRecommendationsError && (
+            <button
+              onClick={() =>
+                setCompanyRecommendationsRefresh((current) => current + 1)
+              }
+              className="rounded-full border border-dashed border-[#d7d1c8] bg-white/40 px-3 py-1.5 text-[11px] font-bold text-[#8f8a82] transition hover:bg-white"
+            >
+              목록 다시 불러오기
+            </button>
+          )
         )}
       </div>
 

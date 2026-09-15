@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchJobKoreaCompanyJobs } from "../../../lib/jobkorea";
 
 const decodeXml = (value: string) =>
   value
@@ -29,41 +30,6 @@ const normalizePublishedAt = (value: string) => {
   return new Date(
     Date.UTC(Number(korean[3]), Number(korean[2]) - 1, Number(korean[1])),
   ).toUTCString();
-};
-
-const normalizeCompanyName = (value: string) =>
-  value
-    .toLocaleLowerCase("ko-KR")
-    .replace(/㈜|\(주\)|주식회사|[^a-z0-9가-힣]/g, "");
-
-const parseJobKoreaCompanyJobs = (html: string, company: string) => {
-  const decoded = html.replace(/\\"/g, '"').replace(/\\u0026/g, "&");
-  const requestedCompany = normalizeCompanyName(company);
-  const companyPattern =
-    /"name":"([^"]+)"[\s\S]{0,2600}?"jobInfos":\[([\s\S]*?)\]\}/g;
-  const companyMatch = Array.from(decoded.matchAll(companyPattern)).find(
-    (match) => normalizeCompanyName(match[1]) === requestedCompany,
-  );
-  if (!companyMatch) return [];
-
-  const jobPattern =
-    /"jobId":"([^"]+)"[\s\S]*?"title":"([^"]+)"[\s\S]*?"applicationEndAt":"([^"]+)"/g;
-  return Array.from(companyMatch[2].matchAll(jobPattern)).map((match) => {
-    const deadline = match[3].slice(0, 10);
-    const alwaysHiring = Number(deadline.slice(0, 4)) >= 2060;
-    return {
-      id: `jobkorea-${match[1]}`,
-      title: decodeXml(match[2]),
-      link: `https://www.jobkorea.co.kr/Recruit/GI_Read/${match[1]}`,
-      source: "잡코리아",
-      pubDate: "",
-      description: alwaysHiring
-        ? "잡코리아에서 상시채용으로 확인된 공고예요."
-        : "잡코리아 회사별 공고에서 마감일을 확인했어요.",
-      detectedDeadline: alwaysHiring ? null : deadline,
-      provider: "잡코리아 회사 공고",
-    };
-  });
 };
 
 const detectDeadline = (text: string, publishedAt: string) => {
@@ -134,22 +100,10 @@ export async function GET(request: NextRequest) {
     );
 
   try {
-    let jobKoreaItems: ReturnType<typeof parseJobKoreaCompanyJobs> = [];
+    let jobKoreaItems: Awaited<ReturnType<typeof fetchJobKoreaCompanyJobs>> =
+      [];
     try {
-      const jobKoreaResponse = await fetch(
-        `https://www.jobkorea.co.kr/Search/?stext=${encodeURIComponent(company)}`,
-        {
-          headers: { "User-Agent": "Mozilla/5.0 PatrickJobHunt/1.0" },
-          next: { revalidate: 1800 },
-          signal: AbortSignal.timeout(15_000),
-        },
-      );
-      if (jobKoreaResponse.ok) {
-        jobKoreaItems = parseJobKoreaCompanyJobs(
-          await jobKoreaResponse.text(),
-          company,
-        );
-      }
+      jobKoreaItems = await fetchJobKoreaCompanyJobs(company, 1800);
     } catch {
       // 잡코리아가 응답하지 않으면 아래 무료 검색 결과로 계속 진행합니다.
     }
