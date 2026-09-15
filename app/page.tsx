@@ -22,12 +22,14 @@ import {
   LoaderCircle,
   LockKeyhole,
   LogOut,
+  MapPin,
   Mail,
   Newspaper,
   PencilLine,
   Plus,
   Search,
   Shell,
+  SlidersHorizontal,
   Sparkles,
   Target,
   Trash2,
@@ -70,6 +72,14 @@ type CompanyRecommendation = {
   nearestDeadline: string | null;
   daysLeft: number | null;
   sampleTitle: string;
+  location: string;
+  entryLevelCount: number;
+  jobTitles: string[];
+};
+type RecommendationPreferences = {
+  keyword: string;
+  region: string;
+  entryLevelOnly: boolean;
 };
 type SavedJob = {
   id: string;
@@ -92,6 +102,7 @@ type Application = {
   status: ApplicationStatus;
   rejectionReason: string;
   retrospective: string;
+  memo?: string;
 };
 type RetrospectiveRecord = {
   id: string;
@@ -224,6 +235,7 @@ type UserWorkspace = {
   customCertifications?: CertificationDefinition[];
   experiences?: Experience[];
   birthday?: string;
+  recommendationPreferences?: RecommendationPreferences;
 };
 
 const STATUS: ApplicationStatus[] = [
@@ -826,6 +838,14 @@ export default function Home() {
     useState(false);
   const [companyRecommendationsRefresh, setCompanyRecommendationsRefresh] =
     useState(0);
+  const [recommendationFiltersOpen, setRecommendationFiltersOpen] =
+    useState(false);
+  const [recommendationPreferences, setRecommendationPreferences] =
+    useState<RecommendationPreferences>({
+      keyword: "",
+      region: "",
+      entryLevelOnly: false,
+    });
   const [pickedListing, setPickedListing] = useState<JobListing | null>(null);
   const [deadline, setDeadline] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -1037,6 +1057,8 @@ export default function Home() {
       if (workspace.customCertifications)
         setCustomCertifications(workspace.customCertifications);
       if (workspace.experiences) setExperiences(workspace.experiences);
+      if (workspace.recommendationPreferences)
+        setRecommendationPreferences(workspace.recommendationPreferences);
       const metadataBirthday = authUser.user_metadata.birth_date;
       const savedBirthday =
         workspace.birthday ||
@@ -1069,6 +1091,7 @@ export default function Home() {
         customCertifications,
         experiences,
         birthday,
+        recommendationPreferences,
       };
       const { error } = await client.from("user_workspaces").upsert({
         user_id: authUser.id,
@@ -1089,6 +1112,7 @@ export default function Home() {
     customCertifications,
     experiences,
     jobDataReady,
+    recommendationPreferences,
   ]);
 
   useEffect(() => {
@@ -1117,6 +1141,68 @@ export default function Home() {
       cancelled = true;
     };
   }, [companyRecommendationsRefresh, jobDataReady]);
+
+  useEffect(() => {
+    const modalOpen =
+      aiRecommendation.open ||
+      tarot.open ||
+      showCustomCertificationForm ||
+      certificationPlannerOpen ||
+      jobSearch.open ||
+      Boolean(experienceDeleteTarget) ||
+      showExperienceModal ||
+      stageEditor ||
+      Boolean(deleteTarget) ||
+      birthdayModalOpen ||
+      showWelcome;
+    if (!modalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeTopLayer = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (aiRecommendation.open) {
+        setAiRecommendation((current) => ({ ...current, open: false }));
+      } else if (tarot.open) {
+        setTarot((current) => ({ ...current, open: false }));
+      } else if (showCustomCertificationForm) {
+        setShowCustomCertificationForm(false);
+      } else if (certificationPlannerOpen) {
+        setCertificationPlannerOpen(false);
+      } else if (jobSearch.open) {
+        setJobSearch((current) => ({ ...current, open: false }));
+      } else if (experienceDeleteTarget) {
+        setExperienceDeleteTarget(null);
+      } else if (showExperienceModal) {
+        setShowExperienceModal(false);
+        setExperienceEditIndex(null);
+      } else if (stageEditor) {
+        setStageEditor(false);
+      } else if (deleteTarget) {
+        setDeleteTarget(null);
+      } else if (birthdayModalOpen) {
+        setBirthdayModalOpen(false);
+      } else if (showWelcome) {
+        setShowWelcome(false);
+      }
+    };
+    document.addEventListener("keydown", closeTopLayer);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeTopLayer);
+    };
+  }, [
+    aiRecommendation.open,
+    birthdayModalOpen,
+    certificationPlannerOpen,
+    deleteTarget,
+    experienceDeleteTarget,
+    jobSearch.open,
+    showCustomCertificationForm,
+    showExperienceModal,
+    showWelcome,
+    stageEditor,
+    tarot.open,
+  ]);
   const days = useMemo(() => {
     const y = viewDate.getFullYear(),
       m = viewDate.getMonth();
@@ -1199,6 +1285,93 @@ export default function Home() {
         (application) => application.id === selected.applicationId,
       ) ?? null)
     : null;
+  const recommendationRegions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          companyRecommendations
+            .map((company) => company.location.split(" ")[0])
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "ko-KR")),
+    [companyRecommendations],
+  );
+  const personalizedRecommendations = useMemo(() => {
+    const keyword = recommendationPreferences.keyword
+      .trim()
+      .toLocaleLowerCase("ko-KR");
+    const trackedCompanies = new Set(
+      [...savedJobs, ...applications].map((item) =>
+        item.company.toLocaleLowerCase("ko-KR").replaceAll(" ", ""),
+      ),
+    );
+    const experienceKeywords = experiences.flatMap(([, title, description]) =>
+      `${title} ${description}`
+        .toLocaleLowerCase("ko-KR")
+        .split(/[^a-z0-9가-힣+#]+/)
+        .filter(
+          (word) =>
+            word.length >= 2 &&
+            !/경험|프로젝트|활동|업무|담당|진행|참여|통해|활용/.test(word),
+        )
+        .slice(0, 8),
+    );
+    return companyRecommendations
+      .filter((company) => {
+        const searchText = [company.name, company.sector, ...company.jobTitles]
+          .join(" ")
+          .toLocaleLowerCase("ko-KR");
+        return (
+          (!keyword || searchText.includes(keyword)) &&
+          (!recommendationPreferences.region ||
+            company.location.startsWith(recommendationPreferences.region)) &&
+          (!recommendationPreferences.entryLevelOnly ||
+            company.entryLevelCount > 0)
+        );
+      })
+      .map((company) => {
+        const companySearchText = [
+          company.sector,
+          company.sampleTitle,
+          ...company.jobTitles,
+        ]
+          .join(" ")
+          .toLocaleLowerCase("ko-KR");
+        const isTracked = trackedCompanies.has(
+          company.name.toLocaleLowerCase("ko-KR").replaceAll(" ", ""),
+        );
+        const experienceMatch = experienceKeywords.find((word) =>
+          companySearchText.includes(word),
+        );
+        const reason = isTracked
+          ? "관심 기록이 있어 먼저 추천해요"
+          : experienceMatch
+            ? `조개함의 ‘${experienceMatch}’ 경험과 연결돼요`
+            : keyword
+              ? `‘${recommendationPreferences.keyword.trim()}’ 관련 공고가 있어요`
+              : recommendationPreferences.entryLevelOnly &&
+                  company.entryLevelCount > 0
+                ? `신입 공고 ${company.entryLevelCount}개가 확인됐어요`
+                : company.daysLeft !== null && company.daysLeft <= 3
+                  ? "마감이 가까워 먼저 확인해 보세요"
+                  : `현재 공고 ${company.activeJobCount}개가 열려 있어요`;
+        return { ...company, reason, isTracked, experienceMatch };
+      })
+      .sort(
+        (a, b) =>
+          Number(b.isTracked) - Number(a.isTracked) ||
+          Number(Boolean(b.experienceMatch)) -
+            Number(Boolean(a.experienceMatch)) ||
+          (a.daysLeft ?? Number.MAX_SAFE_INTEGER) -
+            (b.daysLeft ?? Number.MAX_SAFE_INTEGER),
+      );
+  }, [
+    applications,
+    companyRecommendations,
+    experiences,
+    recommendationPreferences,
+    savedJobs,
+  ]);
 
   const searchCompany = async (name: string) => {
     if (!name.trim()) return;
@@ -1652,6 +1825,7 @@ export default function Home() {
       status: "준비 중",
       rejectionReason: "",
       retrospective: "",
+      memo: "",
     };
     const newEvents: JobEvent[] = dates.map((date, i) => ({
       id: `${job.company}-${Date.now()}-${i}`,
@@ -1715,7 +1889,7 @@ export default function Home() {
     }
   };
   const updateApplicationNotes = (
-    field: "rejectionReason" | "retrospective",
+    field: "rejectionReason" | "retrospective" | "memo",
     value: string,
   ) => {
     if (!selectedApplication) return;
@@ -2179,6 +2353,21 @@ export default function Home() {
     : patrickMessages;
   const activePatrickMessage =
     dailyMessages[patrickMessageIndex % dailyMessages.length];
+  const toastTone = /최종 합격/.test(toastText)
+    ? "celebration"
+    : /못했|실패|오류/.test(toastText)
+      ? "error"
+      : /먼저|이미|입력해|확인해|없어요/.test(toastText)
+        ? "warning"
+        : "success";
+  const toastLabel =
+    toastTone === "celebration"
+      ? "정말 좋은 소식"
+      : toastTone === "error"
+        ? "문제가 생겼어요"
+        : toastTone === "warning"
+          ? "확인해 주세요"
+          : "저장했어요";
   const saveBirthday = async () => {
     if (!birthdayDraft) return;
     if (supabase && authUser) {
@@ -2567,47 +2756,6 @@ export default function Home() {
         >
           🔮 취업 타로방
         </button>
-        <span className="mr-1 flex items-center gap-1 text-[11px] font-extrabold text-[#8f8a82]">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#64b99d] opacity-50" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4a9d83]" />
-          </span>
-          지금 채용 중
-        </span>
-        {companyRecommendationsLoading ? (
-          <span className="flex items-center gap-1.5 rounded-full border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-bold text-[#9a968e]">
-            <LoaderCircle size={12} className="animate-spin" /> 공고 확인 중
-          </span>
-        ) : companyRecommendations.length > 0 ? (
-          companyRecommendations.map((company) => (
-            <button
-              key={company.name}
-              onClick={() => searchCompany(company.name)}
-              title={`${company.sector} · 채용 공고 ${company.activeJobCount}개 · ${company.nearestDeadline ? `${company.nearestDeadline} 마감` : "상시채용"}\n${company.sampleTitle}`}
-              className="group flex items-center gap-1.5 rounded-full border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-extrabold text-[#68655f] shadow-sm transition hover:-translate-y-0.5 hover:border-[#ffb6c7] hover:bg-white hover:text-[#ed6f8b]"
-            >
-              {company.name}
-              <span className="rounded-full bg-[#e8f5ef] px-1.5 py-0.5 text-[9px] text-[#3e8e75] transition group-hover:bg-[#fff0f4] group-hover:text-[#e16481]">
-                {company.daysLeft === null
-                  ? "상시"
-                  : company.daysLeft === 0
-                    ? "오늘 마감"
-                    : `D-${company.daysLeft}`}
-              </span>
-            </button>
-          ))
-        ) : (
-          companyRecommendationsError && (
-            <button
-              onClick={() =>
-                setCompanyRecommendationsRefresh((current) => current + 1)
-              }
-              className="rounded-full border border-dashed border-[#d7d1c8] bg-white/40 px-3 py-1.5 text-[11px] font-bold text-[#8f8a82] transition hover:bg-white"
-            >
-              목록 다시 불러오기
-            </button>
-          )
-        )}
       </div>
 
       <section className="mx-auto grid max-w-[1480px] gap-6 md:grid-cols-[minmax(0,1.55fr)_minmax(330px,.8fr)] app-grid">
@@ -2685,6 +2833,151 @@ export default function Home() {
               </button>
             </div>
           </div>
+          <section className="mb-5 rounded-[28px] border border-white/90 bg-white/80 p-4 paper-shadow backdrop-blur-sm md:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="flex items-center gap-1.5 text-[11px] font-extrabold text-[#4a9d83]">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#64b99d] opacity-50" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4a9d83]" />
+                  </span>
+                  지금 채용 중
+                </p>
+                <h3 className="mt-1 text-lg font-extrabold tracking-[-.03em]">
+                  오늘 써볼 회사를 골라봤어요
+                </h3>
+                <p className="mt-1 text-xs text-[#8f8a82]">
+                  실제 공고와 내 관심 기록·조개함 경험을 함께 보고 추천해요.
+                </p>
+              </div>
+              <button
+                onClick={() => setRecommendationFiltersOpen((open) => !open)}
+                aria-expanded={recommendationFiltersOpen}
+                className="flex items-center gap-1.5 rounded-xl border border-[#ded9d0] bg-white px-3 py-2 text-[11px] font-extrabold text-[#706c65] transition hover:border-[#a8e6cf]"
+              >
+                <SlidersHorizontal size={14} /> 맞춤 설정
+              </button>
+            </div>
+            {recommendationFiltersOpen && (
+              <div className="mt-4 grid gap-2 rounded-2xl bg-[#f8f6f1] p-3 sm:grid-cols-[1fr_150px_auto]">
+                <label className="flex items-center gap-2 rounded-xl border border-[#e6e0d7] bg-white px-3">
+                  <Search size={14} className="shrink-0 text-[#a19c93]" />
+                  <input
+                    value={recommendationPreferences.keyword}
+                    onChange={(event) =>
+                      setRecommendationPreferences((preferences) => ({
+                        ...preferences,
+                        keyword: event.target.value,
+                      }))
+                    }
+                    placeholder="직무 키워드 (예: 개발, 마케팅)"
+                    className="min-w-0 flex-1 bg-transparent py-2.5 text-xs outline-none"
+                  />
+                </label>
+                <select
+                  value={recommendationPreferences.region}
+                  onChange={(event) =>
+                    setRecommendationPreferences((preferences) => ({
+                      ...preferences,
+                      region: event.target.value,
+                    }))
+                  }
+                  aria-label="선호 지역"
+                  className="rounded-xl border border-[#e6e0d7] bg-white px-3 py-2.5 text-xs font-bold outline-none"
+                >
+                  <option value="">지역 전체</option>
+                  {recommendationRegions.map((region) => (
+                    <option key={region} value={region}>
+                      {region}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#e6e0d7] bg-white px-3 py-2.5 text-xs font-extrabold text-[#706c65]">
+                  <input
+                    type="checkbox"
+                    checked={recommendationPreferences.entryLevelOnly}
+                    onChange={(event) =>
+                      setRecommendationPreferences((preferences) => ({
+                        ...preferences,
+                        entryLevelOnly: event.target.checked,
+                      }))
+                    }
+                    className="accent-[#ff85a2]"
+                  />
+                  신입 공고만
+                </label>
+              </div>
+            )}
+            {companyRecommendationsLoading ? (
+              <div className="mt-4 flex min-h-28 items-center justify-center rounded-2xl bg-[#faf8f3] text-xs font-bold text-[#98938b]">
+                <LoaderCircle size={16} className="mr-2 animate-spin" /> 채용
+                공고를 확인하고 있어요
+              </div>
+            ) : personalizedRecommendations.length > 0 ? (
+              <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
+                {personalizedRecommendations.map((company) => (
+                  <button
+                    key={company.name}
+                    onClick={() => searchCompany(company.name)}
+                    className="group min-w-[270px] flex-1 rounded-2xl border border-[#ebe6dd] bg-[#fffdfa] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#ffb6c7] hover:shadow-[0_12px_26px_rgba(87,67,50,.08)] sm:min-w-[290px]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-extrabold text-[#3d3a36]">
+                          {company.name}
+                        </p>
+                        <p className="mt-1 flex items-center gap-1 truncate text-[10px] font-bold text-[#99948b]">
+                          <MapPin size={11} />{" "}
+                          {company.location || "지역 확인 중"}
+                          <span>·</span> {company.sector}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-[#e8f5ef] px-2 py-1 text-[10px] font-extrabold text-[#3e8e75] group-hover:bg-[#fff0f4] group-hover:text-[#e16481]">
+                        {company.daysLeft === null
+                          ? "상시"
+                          : company.daysLeft === 0
+                            ? "오늘 마감"
+                            : `D-${company.daysLeft}`}
+                      </span>
+                    </div>
+                    <p className="mt-3 line-clamp-2 min-h-10 text-xs font-extrabold leading-5 text-[#625e57]">
+                      {company.sampleTitle}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#f0ece4] pt-3">
+                      <p className="min-w-0 truncate text-[10px] font-bold text-[#d06580]">
+                        {company.reason}
+                      </p>
+                      <span className="shrink-0 text-[10px] font-extrabold text-[#858078]">
+                        공고 {company.activeJobCount}개 →
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-dashed border-[#ddd7cd] p-5 text-center">
+                <p className="text-sm font-extrabold">
+                  조건에 맞는 추천이 아직 없어요.
+                </p>
+                <button
+                  onClick={() => {
+                    setRecommendationPreferences({
+                      keyword: "",
+                      region: "",
+                      entryLevelOnly: false,
+                    });
+                    if (companyRecommendationsError)
+                      setCompanyRecommendationsRefresh(
+                        (current) => current + 1,
+                      );
+                  }}
+                  className="mt-2 text-xs font-extrabold text-[#e56d88] underline decoration-[#f5b8c6] underline-offset-4"
+                >
+                  조건 초기화하고 다시 보기
+                </button>
+              </div>
+            )}
+          </section>
           <div className="surface-card overflow-hidden rounded-[28px] bg-white paper-shadow">
             <div className="flex items-center justify-between border-b border-[#f1eee7] px-5 py-5 md:px-7">
               <div className="flex items-center gap-3">
@@ -3015,12 +3308,20 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="my-6 space-y-4">
-                    <h3 className="text-sm font-extrabold">공고 메모</h3>
-                    <div className="rounded-2xl border border-dashed border-[#e8e1d7] p-4 text-sm leading-6 text-[#92908a]">
-                      아직 메모가 없어요.
-                      <br />
-                      공고를 보며 기억해둘 내용을 적어보세요 🐚
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-extrabold">공고 메모</h3>
+                      <span className="text-[10px] font-bold text-[#9d988f]">
+                        자동 저장
+                      </span>
                     </div>
+                    <textarea
+                      value={selectedApplication.memo ?? ""}
+                      onChange={(event) =>
+                        updateApplicationNotes("memo", event.target.value)
+                      }
+                      placeholder="담당 업무, 자소서에 강조할 경험, 확인할 질문을 적어두세요."
+                      className="min-h-28 w-full resize-y rounded-2xl border border-[#e8e1d7] bg-[#fffdfa] p-4 text-sm leading-6 outline-none transition placeholder:text-[#aaa59d] focus:border-[#ffadc0] focus:bg-white"
+                    />
                   </div>
                   <button
                     onClick={requestCoverLetter}
@@ -4612,8 +4913,17 @@ export default function Home() {
         </div>
       )}
       {jobSearch.open && (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-[#31363f]/40 p-4 backdrop-blur-[3px]">
-          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] bg-white paper-shadow">
+        <div
+          className="fixed inset-0 z-[75] flex justify-end bg-[#31363f]/40 backdrop-blur-[3px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget)
+              setJobSearch((current) => ({ ...current, open: false }));
+          }}
+        >
+          <aside
+            aria-label="채용 공고 검색 결과"
+            className="job-search-drawer flex h-full w-full max-w-2xl flex-col overflow-hidden bg-white shadow-[-20px_0_70px_rgba(31,28,25,.22)]"
+          >
             <div className="flex items-start justify-between border-b border-[#eeeae2] bg-[#fffaf0] p-5 md:p-6">
               <div>
                 <p className="mb-1 text-xs font-extrabold text-[#ff7597]">
@@ -4860,7 +5170,7 @@ export default function Home() {
                 </>
               )}
             </div>
-          </div>
+          </aside>
         </div>
       )}
       {aiRecommendation.open && (
@@ -4973,19 +5283,32 @@ export default function Home() {
         </div>
       )}
       {toast && (
-        <div className="achievement-toast fixed bottom-7 left-1/2 z-50 flex w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-3.5 text-sm text-[#48434c]">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#ffe3ea] to-[#eee9ff] text-[#8b668f] shadow-sm">
-            <Sparkles size={17} />
+        <div
+          className="achievement-toast fixed bottom-7 left-1/2 z-50 flex w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 items-center gap-3 rounded-2xl px-4 py-3.5 text-sm text-[#48434c]"
+          data-tone={toastTone}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="toast-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm">
+            {toastTone === "error" ? (
+              <AlertCircle size={18} />
+            ) : toastTone === "warning" ? (
+              <Clock3 size={18} />
+            ) : toastTone === "celebration" ? (
+              <Sparkles size={19} />
+            ) : (
+              <Check size={18} />
+            )}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-extrabold tracking-[.12em] text-[#9d829a]">
-              GOOD PROGRESS
+            <p className="toast-label text-[10px] font-extrabold">
+              {toastLabel}
             </p>
-            <p className="mt-0.5 text-xs font-extrabold leading-5">
+            <p className="mt-0.5 text-[13px] font-bold leading-5">
               {toastText}
             </p>
           </div>
-          <span className="text-lg">⭐</span>
+          {toastTone === "celebration" && <span className="text-xl">🎉</span>}
         </div>
       )}
     </main>

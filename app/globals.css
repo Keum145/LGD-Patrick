@@ -274,8 +274,54 @@ h3,
   content: "";
   pointer-events: none;
 }
+.achievement-toast[data-tone="success"] {
+  border-color: rgba(104, 190, 158, 0.38);
+}
+.achievement-toast[data-tone="success"] .toast-icon {
+  background: #e7f7f0;
+  color: #397e68;
+}
+.achievement-toast[data-tone="success"] .toast-label {
+  color: #4b8e77;
+}
+.achievement-toast[data-tone="warning"] {
+  border-color: rgba(224, 173, 82, 0.42);
+  background: rgba(255, 250, 237, 0.94);
+}
+.achievement-toast[data-tone="warning"] .toast-icon {
+  background: #fff0cf;
+  color: #a56f1d;
+}
+.achievement-toast[data-tone="warning"] .toast-label {
+  color: #9b6b25;
+}
+.achievement-toast[data-tone="error"] {
+  border-color: rgba(224, 102, 125, 0.42);
+  background: rgba(255, 245, 247, 0.95);
+}
+.achievement-toast[data-tone="error"] .toast-icon {
+  background: #ffe3e9;
+  color: #bc4e65;
+}
+.achievement-toast[data-tone="error"] .toast-label {
+  color: #b04e63;
+}
+.achievement-toast[data-tone="celebration"] {
+  border-color: rgba(134, 111, 201, 0.38);
+  background: linear-gradient(135deg, #fff8dc, #fff5fa 48%, #f1edff);
+}
+.achievement-toast[data-tone="celebration"] .toast-icon {
+  background: linear-gradient(135deg, #ffeaa5, #eedfff);
+  color: #725ba8;
+}
+.achievement-toast[data-tone="celebration"] .toast-label {
+  color: #725ba8;
+}
 .tarot-backdrop {
   animation: veilIn 240ms ease-out both;
+}
+.job-search-drawer {
+  animation: drawerArrive 360ms cubic-bezier(0.2, 0.82, 0.25, 1) both;
 }
 .tarot-modal {
   border: 1px solid rgba(255, 255, 255, 0.42);
@@ -433,6 +479,16 @@ h3,
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
+  }
+}
+@keyframes drawerArrive {
+  from {
+    opacity: 0;
+    transform: translateX(34px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 @keyframes brandFloat {

@@ -20,6 +20,9 @@ export type JobKoreaListing = {
   description: string;
   detectedDeadline: string | null;
   provider: "잡코리아 회사 공고";
+  location: string;
+  industry: string;
+  experienceLevel: "신입" | "경력" | "무관";
 };
 
 export const parseJobKoreaCompanyJobs = (
@@ -29,17 +32,18 @@ export const parseJobKoreaCompanyJobs = (
   const decoded = html.replace(/\\"/g, '"').replace(/\\u0026/g, "&");
   const requestedCompany = normalizeCompanyName(company);
   const companyPattern =
-    /"name":"([^"]+)"[\s\S]{0,2600}?"jobInfos":\[([\s\S]*?)\]\}/g;
+    /"address":"([^"]*)","name":"([^"]+)"[\s\S]{0,1600}?"industry":"([^"]*)"[\s\S]{0,1600}?"jobInfos":\[([\s\S]*?)\]\}/g;
   const companyMatch = Array.from(decoded.matchAll(companyPattern)).find(
-    (match) => normalizeCompanyName(match[1]) === requestedCompany,
+    (match) => normalizeCompanyName(match[2]) === requestedCompany,
   );
   if (!companyMatch) return [];
 
   const jobPattern =
     /"jobId":"([^"]+)"[\s\S]*?"title":"([^"]+)"[\s\S]*?"applicationEndAt":"([^"]+)"/g;
-  return Array.from(companyMatch[2].matchAll(jobPattern)).map((match) => {
+  return Array.from(companyMatch[4].matchAll(jobPattern)).map((match) => {
     const deadline = match[3].slice(0, 10);
     const alwaysHiring = Number(deadline.slice(0, 4)) >= 2060;
+    const careerType = match[0].match(/"career":\{"type":"([^"]+)"/)?.[1];
     return {
       id: `jobkorea-${match[1]}`,
       title: decodeHtml(match[2]),
@@ -51,6 +55,10 @@ export const parseJobKoreaCompanyJobs = (
         : "잡코리아 회사별 공고에서 마감일을 확인했어요.",
       detectedDeadline: alwaysHiring ? null : deadline,
       provider: "잡코리아 회사 공고",
+      location: decodeHtml(companyMatch[1]).split(" ").slice(0, 2).join(" "),
+      industry: decodeHtml(companyMatch[3]),
+      experienceLevel:
+        careerType === "1" ? "신입" : careerType === "2" ? "경력" : "무관",
     };
   });
 };

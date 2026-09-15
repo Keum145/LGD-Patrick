@@ -11,6 +11,9 @@ type CompanyRecommendation = {
   nearestDeadline: string | null;
   daysLeft: number | null;
   sampleTitle: string;
+  location: string;
+  entryLevelCount: number;
+  jobTitles: string[];
 };
 
 type RecommendationResult = {
@@ -34,7 +37,7 @@ const candidates = [
   { name: "한국전력공사", sector: "공기업" },
 ] as const;
 
-const cacheKey = "job-recommendations-v1";
+const cacheKey = "job-recommendations-v2";
 const cacheHeaders = {
   "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=21600",
 };
@@ -96,6 +99,15 @@ export async function GET() {
           nearestDeadline,
           daysLeft,
           sampleTitle: datedJobs[0]?.title ?? activeJobs[0].title,
+          location: activeJobs[0].location,
+          entryLevelCount: activeJobs.filter(
+            (job) =>
+              job.experienceLevel === "신입" ||
+              /신입|인턴|채용연계|academy|full-time opportunity/i.test(
+                job.title,
+              ),
+          ).length,
+          jobTitles: activeJobs.map((job) => job.title),
         },
       ];
     })
@@ -105,8 +117,7 @@ export async function GET() {
         (a.daysLeft ?? Number.MAX_SAFE_INTEGER) -
           (b.daysLeft ?? Number.MAX_SAFE_INTEGER) ||
         b.activeJobCount - a.activeJobCount,
-    )
-    .slice(0, 6);
+    );
 
   const payload: RecommendationResult = {
     companies,
