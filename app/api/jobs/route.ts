@@ -143,8 +143,13 @@ export async function GET(request: NextRequest) {
     const items = unique
       .filter(
         (item) =>
-          !item.detectedDeadline ||
-          item.detectedDeadline.localeCompare(today) >= 0,
+          (recruitmentPlatformPattern.test(item.link) ||
+            officialPattern.test(item.link) ||
+            /채용|공채|신입|인턴|career|recruit|jobs?/i.test(
+              `${item.title} ${item.description}`,
+            )) &&
+          (!item.detectedDeadline ||
+            item.detectedDeadline.localeCompare(today) >= 0),
       )
       .sort(
         (a, b) =>

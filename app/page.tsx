@@ -4409,7 +4409,7 @@ export default function Home() {
               <p className="mb-2 text-[10px] font-extrabold text-[#8d8981]">
                 다른 채용 사이트에서 찾기
               </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
                   {
                     label: "자소설닷컴",
@@ -4426,6 +4426,10 @@ export default function Home() {
                   {
                     label: "원티드",
                     url: `https://www.wanted.co.kr/search?query=${encodeURIComponent(jobSearch.company)}&tab=position`,
+                  },
+                  {
+                    label: "캐치",
+                    url: `https://www.google.com/search?q=${encodeURIComponent(`site:catch.co.kr/NCS/RecruitInfoDetails "${jobSearch.company}" 채용`)}`,
                   },
                 ].map((source) => (
                   <a
