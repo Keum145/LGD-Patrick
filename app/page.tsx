@@ -587,34 +587,88 @@ const shiftDate = (date: string, days: number) => {
 };
 const patrickMessages = [
   {
-    label: "뚱이의 오늘 한마디",
-    title: "오늘은 공고 하나만 봐도 잘한 거야. 🌸",
-    description: "천천히, 하나씩 해보자!",
+    label: "뚱이의 느긋한 작전",
+    title: "오늘은 공고 하나만 제대로 봐도 대성공이야. ⭐",
+    description: "바닷속에서는 서두르면 모래만 뿌옇게 일어나거든!",
     color: "#ff85a2",
   },
   {
-    label: "오늘의 취업 동기",
-    title: "완벽한 지원서보다 제출한 지원서가 한 걸음 더 앞이야. 🐚",
-    description: "15분만 시작하면 다음 문장은 생각보다 쉽게 나와요.",
-    color: "#6bb99c",
+    label: "비키니시티 속보",
+    title: "완벽한 지원서보다 제출한 지원서가 먼저 헤엄쳐 가! 🐠",
+    description: "첫 문장만 쓰면 다음 문장은 해류를 타고 따라올 거야.",
+    color: "#289f9b",
   },
   {
-    label: "마음 충전 문장",
-    title: "느린 날도 방향만 맞으면 충분히 전진하고 있어. 🌊",
-    description: "남의 속도 대신 어제의 나와 비교해 봐요.",
-    color: "#7f75d9",
+    label: "해파리 동산에서 온 편지",
+    title: "느린 날도 방향만 맞으면 충분히 전진 중이야. 🪼",
+    description: "해파리도 둥실둥실 가지만 결국 목적지에 도착해.",
+    color: "#6f67c8",
   },
   {
-    label: "오늘의 작은 미션",
-    title: "공고 한 개를 열고 요구 역량 세 가지만 표시해 보자. ✏️",
-    description: "작게 쪼갠 준비가 결국 면접 답변이 됩니다.",
+    label: "오늘의 조개껍데기 미션",
+    title: "공고 하나에서 요구 역량 세 개만 건져 보자. 🐚",
+    description: "작은 진주를 모으면 면접에서 반짝이는 이야기가 돼.",
     color: "#d69a3c",
   },
   {
-    label: "뚱이의 응원",
-    title: "탈락은 부족함의 증명이 아니라 방향을 다듬는 자료야. ⭐",
-    description: "이번에 배운 한 줄을 다음 지원서에 꼭 가져가요.",
+    label: "뚱이의 진심",
+    title: "탈락은 끝이 아니라 다음 항로를 알려주는 표지판이야. 🧭",
+    description: "이번에 배운 한 줄은 다음 지원서의 비밀 무기가 될 거야.",
     color: "#e56f8a",
+  },
+  {
+    label: "집게리아식 시간 관리",
+    title: "25분 집중하고 5분은 아무 생각 없이 버블을 보자. 🫧",
+    description: "쉬는 시간까지 계획에 넣어야 오래 헤엄칠 수 있어.",
+    color: "#1f9ab0",
+  },
+  {
+    label: "산호 우체국 알림",
+    title: "메일함과 스팸함을 한 번씩 확인해 볼 시간이야. 📮",
+    description: "기다리던 연락이 엉뚱한 조개함에 들어가 있을지도 몰라.",
+    color: "#e86f72",
+  },
+  {
+    label: "면접 전 잠수 훈련",
+    title: "답변은 길이보다 첫 문장이 또렷한 게 더 중요해. 🎙️",
+    description: "결론부터 한 문장, 근거는 두 문장으로 연습해 보자.",
+    color: "#775bb3",
+  },
+  {
+    label: "오늘의 불가사리 공식",
+    title: "할 일이 다섯 개면 가장 작은 팔 하나부터 움직여! ✋",
+    description: "5분 안에 끝나는 일부터 체크하면 기세가 생겨.",
+    color: "#ef7f91",
+  },
+  {
+    label: "파도 타는 자소서",
+    title: "멋진 표현보다 내가 실제로 한 행동이 더 세게 밀려와. 🌊",
+    description: "상황·행동·결과를 한 줄씩 적으면 초안은 이미 완성이야.",
+    color: "#278ca7",
+  },
+  {
+    label: "모래시계 체크",
+    title: "마감일보다 하루 먼저 끝내는 날을 진짜 마감으로 잡자. ⏳",
+    description: "마지막 날은 제출 확인과 숨 고르기에 남겨 두는 거야.",
+    color: "#c98c35",
+  },
+  {
+    label: "산호초 회복 방송",
+    title: "오늘 집중이 안 되는 건 의지보다 에너지 문제일 수 있어. 🪸",
+    description: "물 한 잔, 스트레칭, 10분 산책부터 하고 다시 오자.",
+    color: "#df6f78",
+  },
+  {
+    label: "뚱이의 자신감 충전",
+    title: "네 경험은 평범한 게 아니라 아직 이름을 못 붙인 보물이야. 💎",
+    description: "무엇을 바꿨는지 숫자 하나를 찾아 제목을 붙여 봐.",
+    color: "#507fc4",
+  },
+  {
+    label: "퇴근한 물고기들의 조언",
+    title: "오늘 할 만큼 했다면 탭을 닫는 것도 실력이야. 🌙",
+    description: "잘 쉬어야 내일의 문장이 더 또렷하게 떠올라.",
+    color: "#6769a8",
   },
 ];
 const fortuneMessages = [
@@ -2184,15 +2238,15 @@ export default function Home() {
 
   if (!authUser) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f4ebd0] p-5 text-[#31363f]">
+      <main className="bikini-auth relative flex min-h-screen items-center justify-center overflow-hidden p-5 text-[#263d4a]">
         <div className="absolute left-[8%] top-[12%] text-6xl opacity-20">
           🫧
         </div>
         <div className="absolute bottom-[10%] right-[8%] text-7xl opacity-15">
           🐚
         </div>
-        <div className="grid w-full max-w-4xl overflow-hidden rounded-[36px] bg-white paper-shadow md:grid-cols-[.9fr_1.1fr]">
-          <div className="relative hidden overflow-hidden bg-[#ffedf2] p-8 md:flex md:flex-col md:justify-between">
+        <div className="bikini-auth-card grid w-full max-w-4xl overflow-hidden rounded-[36px] bg-white paper-shadow md:grid-cols-[.9fr_1.1fr]">
+          <div className="bikini-auth-ocean relative hidden overflow-hidden p-8 md:flex md:flex-col md:justify-between">
             <div>
               <div className="flex h-12 w-12 rotate-[-8deg] items-center justify-center rounded-2xl bg-[#ff85a2] text-2xl">
                 ⭐
@@ -2391,8 +2445,8 @@ export default function Home() {
           </div>
           <div>
             <h1 className="brand-title text-xl md:text-2xl">뚱이랑 취뽀</h1>
-            <p className="text-xs font-medium text-[#92908a]">
-              Patrick's Job Hunt · 느긋하게, 하지만 꾸준히
+            <p className="text-xs font-medium text-[#5e8790]">
+              Bikini City Job Hunt · 느긋하게, 하지만 꾸준히
             </p>
           </div>
         </div>
@@ -2486,8 +2540,8 @@ export default function Home() {
         <div className="min-w-0">
           <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <p className="mb-1 text-sm font-bold text-[#ff85a2]">
-                나의 취뽀 바다
+              <p className="mb-1 text-sm font-bold text-[#168f9d]">
+                비키니시티 취뽀 보드
               </p>
               <h2 className="text-3xl font-extrabold tracking-[-.06em] md:text-4xl">
                 이번 달 일정
