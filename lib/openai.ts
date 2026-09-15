@@ -44,7 +44,7 @@ export async function createStructuredResponse<T>(options: {
       instructions: options.instructions,
       input: options.input,
       reasoning: { effort: "none" },
-      tools: options.useWebSearch ? [{ type: "web_search_preview" }] : [],
+      tools: options.useWebSearch ? [{ type: "web_search" }] : [],
       text: {
         verbosity: "low",
         format: {

@@ -26,6 +26,22 @@ alter table public.certification_cache enable row level security;
 revoke all on table public.certification_cache from anon, authenticated;
 grant all on table public.certification_cache to service_role;
 
+create table if not exists public.job_search_cache (
+  cache_key text primary key,
+  normalized_company text not null,
+  data jsonb not null,
+  fetched_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+create index if not exists job_search_cache_expires_at_idx
+on public.job_search_cache (expires_at);
+
+alter table public.job_search_cache enable row level security;
+
+revoke all on table public.job_search_cache from anon, authenticated;
+grant all on table public.job_search_cache to service_role;
+
 drop policy if exists "Users can read their own workspace" on public.user_workspaces;
 create policy "Users can read their own workspace"
 on public.user_workspaces for select

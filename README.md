@@ -37,7 +37,7 @@ Supabase Authentication의 Email 로그인을 사용합니다. 배포 후에는 
 
 사용자 데이터는 `user_workspaces` 테이블의 JSON 데이터로 저장되며, Row Level Security 정책이 로그인한 본인의 행에만 접근하도록 제한합니다. 기존 브라우저의 로컬 데이터는 해당 사용자가 처음 로그인할 때 계정 저장소로 한 번 가져옵니다.
 
-`SUPABASE_SERVICE_ROLE_KEY`는 자격증 공식 일정의 공용 캐시를 서버에서 읽고 저장할 때만 사용합니다. 브라우저에 노출되는 `NEXT_PUBLIC_` 변수나 GitHub 저장소에는 절대 넣지 말고, Vercel의 `Settings → Environment Variables`에만 등록합니다. 같은 자격증 일정은 7일 동안 DB 결과를 재사용해 공식 홈페이지 요청을 줄입니다.
+`SUPABASE_SERVICE_ROLE_KEY`는 자격증 공식 일정과 AI가 보완한 채용 일정의 공용 캐시를 서버에서 읽고 저장할 때만 사용합니다. 브라우저에 노출되는 `NEXT_PUBLIC_` 변수나 GitHub 저장소에는 절대 넣지 말고, Vercel의 `Settings → Environment Variables`에만 등록합니다. 같은 자격증 일정은 7일, 같은 기업의 AI 채용 검색 결과는 6시간 동안 재사용합니다.
 
 ## OpenAI 기능 연결
 

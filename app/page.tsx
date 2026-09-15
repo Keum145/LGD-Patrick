@@ -744,14 +744,18 @@ export default function Home() {
     loading: boolean;
     items: JobListing[];
     error: string;
+    note: string;
     fallbackUrl: string;
+    source: "sites" | "ai" | "cache";
   }>({
     open: false,
     company: "",
     loading: false,
     items: [],
     error: "",
+    note: "",
     fallbackUrl: "",
+    source: "sites",
   });
   const [pickedListing, setPickedListing] = useState<JobListing | null>(null);
   const [deadline, setDeadline] = useState("");
@@ -1097,30 +1101,153 @@ export default function Home() {
 
   const searchCompany = async (name: string) => {
     if (!name.trim()) return;
+    const normalizedCompany = name
+      .toLocaleLowerCase("ko-KR")
+      .replace(/[\s._-]+/g, "");
+    const browserCacheKey = `patrick-job-search-v3:${normalizedCompany}`;
     setJobSearch({
       open: true,
       company: name,
       loading: true,
       items: [],
       error: "",
+      note: "",
       fallbackUrl: "",
+      source: "sites",
     });
     setPickedListing(null);
     setDeadline("");
     setManualTitle("");
     setShowManualListing(false);
     try {
+      const cachedValue = window.localStorage.getItem(browserCacheKey);
+      if (cachedValue) {
+        try {
+          const cached = JSON.parse(cachedValue) as {
+            expiresAt?: number;
+            items?: JobListing[];
+            note?: string;
+            fallbackUrl?: string;
+          };
+          if (
+            cached.expiresAt &&
+            cached.expiresAt > Date.now() &&
+            cached.items?.length
+          ) {
+            setJobSearch({
+              open: true,
+              company: name,
+              loading: false,
+              items: cached.items,
+              error: "",
+              note: cached.note || "6시간 안에 확인한 일정을 다시 보여드려요.",
+              fallbackUrl: cached.fallbackUrl || "",
+              source: "cache",
+            });
+            return;
+          }
+        } catch {
+          // 손상된 브라우저 캐시는 삭제하고 새로 검색합니다.
+        }
+        window.localStorage.removeItem(browserCacheKey);
+      }
+
       const response = await fetch(
         `/api/jobs?company=${encodeURIComponent(name)}`,
       );
       const data = await response.json();
+      const siteItems = (data.items ?? []) as JobListing[];
+      const hasConfirmedDeadline = siteItems.some(
+        (item) => item.detectedDeadline,
+      );
+      if (hasConfirmedDeadline) {
+        const result = {
+          items: siteItems,
+          note: "채용 사이트에서 확인된 마감일을 표시했어요.",
+          fallbackUrl: data.fallbackUrl ?? "",
+        };
+        window.localStorage.setItem(
+          browserCacheKey,
+          JSON.stringify({
+            ...result,
+            expiresAt: Date.now() + 6 * 60 * 60 * 1000,
+          }),
+        );
+        setJobSearch({
+          open: true,
+          company: name,
+          loading: false,
+          error: "",
+          source: "sites",
+          ...result,
+        });
+        return;
+      }
+
+      const aiResponse = await fetch("/api/ai/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: name }),
+      });
+      const aiData = await aiResponse.json();
+      const aiItems: JobListing[] = aiResponse.ok
+        ? (aiData.listings ?? []).map(
+            (
+              item: {
+                title: string;
+                url: string;
+                source: string;
+                startDate: string | null;
+                deadline: string | null;
+                confidence: "높음" | "보통" | "낮음";
+                evidence: string;
+              },
+              index: number,
+            ) => ({
+              id: `ai-${index}-${item.url}`,
+              title: item.title,
+              link: item.url,
+              source: item.source,
+              pubDate: item.startDate ?? "",
+              description: item.evidence,
+              detectedDeadline: item.deadline,
+              startDate: item.startDate,
+              confidence: item.confidence,
+            }),
+          )
+        : [];
+      const mergedItems = Array.from(
+        new Map(
+          [...aiItems, ...siteItems].map((item) => [item.link, item]),
+        ).values(),
+      );
+      const result = {
+        items: mergedItems,
+        note: aiItems.length
+          ? aiData.cache?.hit
+            ? "저장된 AI 확인 결과에서 정확한 일정을 불러왔어요."
+            : "채용 사이트에 날짜가 없어 AI가 원문 일정을 보완했어요."
+          : "채용 사이트에서 날짜를 찾지 못해 원문 링크만 보여드려요.",
+        fallbackUrl: data.fallbackUrl ?? "",
+      };
+      if (mergedItems.length) {
+        window.localStorage.setItem(
+          browserCacheKey,
+          JSON.stringify({
+            ...result,
+            expiresAt: Date.now() + 6 * 60 * 60 * 1000,
+          }),
+        );
+      }
       setJobSearch({
         open: true,
         company: name,
         loading: false,
-        items: data.items ?? [],
-        error: data.error || "",
-        fallbackUrl: data.fallbackUrl ?? "",
+        error: aiResponse.ok
+          ? data.error || ""
+          : aiData.error || data.error || "",
+        source: aiItems.length ? "ai" : "sites",
+        ...result,
       });
     } catch {
       setJobSearch({
@@ -1129,7 +1256,9 @@ export default function Home() {
         loading: false,
         items: [],
         error: "검색 중 문제가 생겼어요.",
+        note: "",
         fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${name}" 채용 (site:jasoseol.com OR site:saramin.co.kr OR site:jobkorea.co.kr OR site:wanted.co.kr OR site:catch.co.kr)`)}`,
+        source: "sites",
       });
     }
   };
@@ -4392,8 +4521,18 @@ export default function Home() {
                   ‘{jobSearch.company}’ 검색 결과
                 </h2>
                 <p className="mt-1 text-xs text-[#908c84]">
-                  채용 사이트와 공식 채용 페이지 결과를 모아 보여드려요.
+                  채용 사이트를 먼저 보고, 날짜가 없을 때만 AI가 보완해요.
                 </p>
+                {!jobSearch.loading && jobSearch.note && (
+                  <p className="mt-2 inline-flex rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-extrabold text-[#6f6b64]">
+                    {jobSearch.source === "cache"
+                      ? "저장된 결과 · "
+                      : jobSearch.source === "ai"
+                        ? "AI 일정 보완 · "
+                        : "채용 사이트 · "}
+                    {jobSearch.note}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() =>
