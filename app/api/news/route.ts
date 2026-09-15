@@ -56,7 +56,7 @@ const parseNewsFeed = (xml: string): TodayIssue[] =>
         issues.findIndex((candidate) => candidate.title === issue.title) ===
         index,
     )
-    .slice(0, 5);
+    .slice(0, 10);
 
 export async function GET() {
   try {

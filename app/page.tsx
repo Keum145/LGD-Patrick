@@ -7,7 +7,6 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
   AlertCircle,
   Award,
-  Bell,
   BookOpenText,
   Bookmark,
   BriefcaseBusiness,
@@ -816,7 +815,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState(false);
   const [toastText, setToastText] = useState("오늘도 한 걸음 잘 해냈어요.");
-  const [showWelcome, setShowWelcome] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [jobSearch, setJobSearch] = useState<{
     open: boolean;
     company: string;
@@ -916,6 +915,7 @@ export default function Home() {
     targetName: string;
     birthday: string;
   } | null>(null);
+  const usageGuideStorageKey = `patrick-usage-guide-seen-v1:${authUser?.id ?? "guest"}`;
 
   useEffect(() => {
     const refreshCurrentDate = () => {
@@ -1177,6 +1177,13 @@ export default function Home() {
   }, [jobDataReady]);
 
   useEffect(() => {
+    if (!jobDataReady) return;
+    if (!window.localStorage.getItem(usageGuideStorageKey)) {
+      setShowWelcome(true);
+    }
+  }, [jobDataReady, usageGuideStorageKey]);
+
+  useEffect(() => {
     if (todayIssues.length < 2 || todayIssuesPaused) return;
     const intervalId = window.setInterval(() => {
       setTodayIssueIndex((index) => (index + 1) % todayIssues.length);
@@ -1224,6 +1231,7 @@ export default function Home() {
       } else if (birthdayModalOpen) {
         setBirthdayModalOpen(false);
       } else if (showWelcome) {
+        window.localStorage.setItem(usageGuideStorageKey, "true");
         setShowWelcome(false);
       }
     };
@@ -1244,6 +1252,7 @@ export default function Home() {
     showWelcome,
     stageEditor,
     tarot.open,
+    usageGuideStorageKey,
   ]);
   const days = useMemo(() => {
     const y = viewDate.getFullYear(),
@@ -2398,6 +2407,10 @@ export default function Home() {
   const activeTodayIssue = todayIssues.length
     ? todayIssues[todayIssueIndex % todayIssues.length]
     : null;
+  const closeUsageGuide = () => {
+    window.localStorage.setItem(usageGuideStorageKey, "true");
+    setShowWelcome(false);
+  };
   const toastTone = /최종 합격/.test(toastText)
     ? "celebration"
     : /못했|실패|오류/.test(toastText)
@@ -2744,11 +2757,10 @@ export default function Home() {
           </div>
           <button
             onClick={() => setShowWelcome(true)}
-            aria-label="마감 알림 보기"
-            className="relative rounded-full bg-white/70 p-3 shadow-sm"
+            aria-label="사용 가이드 열기"
+            className="flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-2.5 text-[11px] font-extrabold text-[#6d6861] shadow-sm transition hover:bg-white"
           >
-            <Bell size={18} />
-            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#ff85a2]" />
+            <BookOpenText size={16} className="text-[#df6680]" /> 사용법
           </button>
           <div className="hidden items-center gap-2 rounded-full bg-white/70 py-1.5 pl-3 pr-1.5 shadow-sm md:flex">
             <div>
@@ -2809,7 +2821,7 @@ export default function Home() {
           🔮 취업 타로방
         </button>
         <div
-          className="flex min-w-0 basis-full items-center gap-2 rounded-2xl border border-white/85 bg-white/75 px-3 py-2 shadow-sm md:ml-2 md:basis-0 md:flex-1 md:rounded-full"
+          className="flex min-w-0 basis-full items-center gap-2 rounded-2xl border border-white/85 bg-white/75 px-3 py-2 shadow-sm md:ml-2 md:w-[680px] md:basis-auto md:rounded-full"
           onMouseEnter={() => setTodayIssuesPaused(true)}
           onMouseLeave={() => setTodayIssuesPaused(false)}
         >
@@ -3960,71 +3972,126 @@ export default function Home() {
         </div>
       )}
       {showWelcome && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#31363f]/35 p-4 backdrop-blur-[3px]">
-          <div className="relative w-full max-w-md overflow-hidden rounded-[30px] bg-[#fffaf0] p-6 paper-shadow md:p-7">
-            <div className="absolute -right-5 -top-8 text-8xl opacity-10">
-              ⭐
-            </div>
-            <button
-              onClick={() => setShowWelcome(false)}
-              aria-label="공지 닫기"
-              className="absolute right-4 top-4 rounded-full bg-white p-2 text-[#8e8a82]"
-            >
-              <X size={17} />
-            </button>
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffedf2] text-2xl">
-                🐚
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-[#31363f]/40 p-4 backdrop-blur-[4px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeUsageGuide();
+          }}
+        >
+          <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[30px] bg-[#fffaf0] paper-shadow">
+            <div className="relative overflow-hidden border-b border-[#eee6d9] bg-gradient-to-r from-[#fff0f4] via-[#fffaf0] to-[#eaf8f3] px-6 py-5 md:px-7">
+              <div className="absolute -right-4 -top-8 text-8xl opacity-10">
+                ⭐
               </div>
-              <div>
-                <p className="text-xs font-extrabold text-[#ff7597]">
-                  처음 오셨다면 이렇게 시작해요
-                </p>
-                <h2 className="text-xl font-extrabold">내 취뽀 바다 사용법</h2>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex gap-3 rounded-2xl bg-white p-3">
-                <span className="text-lg">🔎</span>
-                <div>
-                  <p className="text-xs font-extrabold">공고를 찾아 기록해요</p>
-                  <p className="mt-1 text-[11px] leading-5 text-[#8f8b83]">
-                    위 검색창에 기업명을 입력하면 채용 공고를 찾고, 스크랩하거나
-                    지원 일정으로 등록할 수 있어요.
-                  </p>
+              <button
+                onClick={closeUsageGuide}
+                aria-label="사용 가이드 닫기"
+                className="absolute right-4 top-4 rounded-full bg-white/85 p-2 text-[#8e8a82] shadow-sm"
+              >
+                <X size={17} />
+              </button>
+              <div className="flex items-center gap-3 pr-10">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-2xl shadow-sm">
+                  🐚
                 </div>
-              </div>
-              <div className="flex gap-3 rounded-2xl bg-white p-3">
-                <span className="text-lg">📅</span>
                 <div>
-                  <p className="text-xs font-extrabold">
-                    일정을 한눈에 관리해요
+                  <p className="text-xs font-extrabold text-[#ff7597]">
+                    필요할 때 언제든 다시 열어보세요
                   </p>
-                  <p className="mt-1 text-[11px] leading-5 text-[#8f8b83]">
-                    서류 마감, 인적성, 면접 일정을 캘린더에서 확인하고 지원
-                    상태도 단계별로 바꿔 보세요.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3 rounded-2xl bg-white p-3">
-                <span className="text-lg">🫧</span>
-                <div>
-                  <p className="text-xs font-extrabold">
-                    경험과 자격증을 모아둬요
-                  </p>
-                  <p className="mt-1 text-[11px] leading-5 text-[#8f8b83]">
-                    조개함에 경험을 저장하면 자소서 소재로 활용할 수 있고,
-                    자격증 레이더에서 시험 일정도 관리할 수 있어요.
+                  <h2 className="text-2xl font-extrabold">
+                    뚱이랑 취뽀 사용 가이드
+                  </h2>
+                  <p className="mt-1 text-xs text-[#858078]">
+                    공고를 찾는 순간부터 지원 결과를 정리할 때까지 함께해요.
                   </p>
                 </div>
               </div>
             </div>
-            <p className="mt-5 mb-2 text-xs font-extrabold text-[#ff7597]">
-              오늘의 일정 브리핑
-            </p>
-            {urgentDeadlines.length > 0 ? (
-              <div className="space-y-2">
-                {urgentDeadlines.map((event) => {
+            <div className="overflow-y-auto p-5 md:p-7">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    icon: "🔎",
+                    title: "1. 공고 검색과 추천",
+                    description:
+                      "기업명을 검색하거나 ‘오늘 써볼 회사’의 맞춤 추천을 눌러 실제 채용 공고를 확인하세요.",
+                  },
+                  {
+                    icon: "🔖",
+                    title: "2. 공고함에 먼저 저장",
+                    description:
+                      "관심 공고는 스크랩하고, 지원을 결정하면 마감일과 함께 ‘지원 시작’을 누르세요.",
+                  },
+                  {
+                    icon: "📅",
+                    title: "3. 일정과 지원 상태 관리",
+                    description:
+                      "서류 마감은 캘린더에 자동 등록돼요. 인적성·면접은 확정된 뒤 직접 추가할 수 있어요.",
+                  },
+                  {
+                    icon: "✏️",
+                    title: "4. 공고 메모와 회고",
+                    description:
+                      "지원 상세에서 메모를 자동 저장하고, 결과가 아쉬웠다면 회고를 조개함에 남겨보세요.",
+                  },
+                  {
+                    icon: "🐚",
+                    title: "5. 조개함과 AI 자소서",
+                    description:
+                      "프로젝트·인턴 경험을 모아두면 선택한 공고에 맞는 자소서 소재와 초안을 추천받을 수 있어요.",
+                  },
+                  {
+                    icon: "🏅",
+                    title: "6. 자격증과 취업 타로",
+                    description:
+                      "자격증 레이더로 시험 일정을 추가하고, 머리가 복잡할 때는 타로방에서 가볍게 쉬어가세요.",
+                  },
+                ].map((guide) => (
+                  <div
+                    key={guide.title}
+                    className="flex gap-3 rounded-2xl border border-[#eee8df] bg-white p-4"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fff5f7] text-lg">
+                      {guide.icon}
+                    </span>
+                    <div>
+                      <p className="text-sm font-extrabold">{guide.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-[#817c74]">
+                        {guide.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 rounded-2xl bg-[#f5f2eb] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-extrabold text-[#df6680]">
+                      오늘의 일정 브리핑
+                    </p>
+                    <p className="mt-1 text-sm font-extrabold">
+                      {urgentDeadlines.length > 0
+                        ? `3일 안에 마감 ${urgentDeadlines.length}건이 있어요.`
+                        : upcomingDeadlines.length > 0
+                          ? "급한 마감은 없어요. 다음 일정을 확인해 보세요."
+                          : "아직 일정이 없어요. 첫 공고부터 찾아볼까요?"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <span className="rounded-xl bg-[#ffedf2] px-3 py-2 text-center text-[10px] font-extrabold text-[#d95f7a]">
+                      마감 임박 {urgentDeadlines.length}
+                    </span>
+                    <span className="rounded-xl bg-[#eaf8f3] px-3 py-2 text-center text-[10px] font-extrabold text-[#4f9179]">
+                      준비 중{" "}
+                      {
+                        applications.filter(
+                          (application) => application.status === "준비 중",
+                        ).length
+                      }
+                    </span>
+                  </div>
+                </div>
+                {urgentDeadlines.slice(0, 3).map((event) => {
                   const dDay = Math.ceil(
                     (new Date(`${event.date}T00:00:00`).getTime() -
                       new Date(`${todayKey}T00:00:00`).getTime()) /
@@ -4036,72 +4103,27 @@ export default function Home() {
                       onClick={() => {
                         setSelected(event);
                         setTab("detail");
-                        setShowWelcome(false);
+                        closeUsageGuide();
                       }}
-                      className="flex w-full items-center justify-between rounded-2xl border border-[#ffd3dd] bg-white p-4 text-left"
+                      className="mt-3 flex w-full items-center justify-between rounded-xl bg-white px-3 py-2.5 text-left"
                     >
-                      <div>
-                        <p className="text-sm font-extrabold">
-                          {event.company} 서류 마감
-                        </p>
-                        <p className="mt-1 text-xs text-[#959087]">
-                          {event.date.replaceAll("-", ".")} · 눌러서 확인
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-[#ff85a2] px-3 py-1.5 text-xs font-extrabold text-white">
+                      <span className="truncate text-xs font-extrabold">
+                        {event.company} · {event.kind}
+                      </span>
+                      <span className="ml-2 shrink-0 rounded-full bg-[#ff85a2] px-2 py-1 text-[10px] font-extrabold text-white">
                         D-{dDay}
                       </span>
                     </button>
                   );
                 })}
               </div>
-            ) : (
-              <div className="rounded-2xl bg-white p-4">
-                <p className="text-sm font-extrabold">
-                  {upcomingDeadlines.length > 0
-                    ? "3일 이내 마감은 없어요 🌿"
-                    : "아직 등록된 일정이 없어요 🌿"}
-                </p>
-                {upcomingDeadlines[0] && (
-                  <p className="mt-2 text-xs leading-5 text-[#8f8b83]">
-                    다음 일정은 <b>{upcomingDeadlines[0].company}</b> 서류
-                    마감으로, {upcomingDeadlines[0].date.replaceAll("-", ".")}
-                    까지예요.
-                  </p>
-                )}
-                {upcomingDeadlines.length === 0 && (
-                  <p className="mt-2 text-xs leading-5 text-[#8f8b83]">
-                    검색창에서 관심 기업을 찾아 첫 공고를 등록해 보세요.
-                  </p>
-                )}
-              </div>
-            )}
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-[#ffedf2] p-3 text-center">
-                <p className="text-2xl font-extrabold text-[#ee6f8c]">
-                  {urgentDeadlines.length}
-                </p>
-                <p className="text-[10px] font-bold text-[#a77d87]">
-                  마감 임박
-                </p>
-              </div>
-              <div className="rounded-2xl bg-[#eaf8f3] p-3 text-center">
-                <p className="text-2xl font-extrabold text-[#579c84]">
-                  {
-                    applications.filter(
-                      (application) => application.status === "준비 중",
-                    ).length
-                  }
-                </p>
-                <p className="text-[10px] font-bold text-[#78968b]">준비 중</p>
-              </div>
+              <button
+                onClick={closeUsageGuide}
+                className="mt-5 w-full rounded-2xl bg-[#31363f] py-3.5 text-sm font-extrabold text-white transition hover:bg-[#414650]"
+              >
+                가이드 닫고 시작하기
+              </button>
             </div>
-            <button
-              onClick={() => setShowWelcome(false)}
-              className="mt-5 w-full rounded-2xl bg-[#31363f] py-3.5 text-sm font-extrabold text-white"
-            >
-              좋아, 오늘도 하나씩!
-            </button>
           </div>
         </div>
       )}
