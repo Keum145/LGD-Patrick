@@ -126,6 +126,9 @@ h3,
   box-shadow: 0 10px 35px rgba(99, 80, 60, 0.055);
   backdrop-filter: blur(12px);
 }
+.issue-ticker-item {
+  animation: issueSlide 360ms ease-out both;
+}
 .surface-card {
   border: 1px solid rgba(255, 255, 255, 0.9);
   background-color: rgba(255, 255, 255, 0.92) !important;
@@ -489,6 +492,16 @@ h3,
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+@keyframes issueSlide {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 @keyframes brandFloat {

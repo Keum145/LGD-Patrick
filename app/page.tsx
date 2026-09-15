@@ -81,6 +81,13 @@ type RecommendationPreferences = {
   region: string;
   entryLevelOnly: boolean;
 };
+type TodayIssue = {
+  id: string;
+  title: string;
+  source: string;
+  publishedAt: string;
+  url: string;
+};
 type SavedJob = {
   id: string;
   company: string;
@@ -846,6 +853,10 @@ export default function Home() {
       region: "",
       entryLevelOnly: false,
     });
+  const [todayIssues, setTodayIssues] = useState<TodayIssue[]>([]);
+  const [todayIssueIndex, setTodayIssueIndex] = useState(0);
+  const [todayIssuesLoading, setTodayIssuesLoading] = useState(true);
+  const [todayIssuesPaused, setTodayIssuesPaused] = useState(false);
   const [pickedListing, setPickedListing] = useState<JobListing | null>(null);
   const [deadline, setDeadline] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -1141,6 +1152,37 @@ export default function Home() {
       cancelled = true;
     };
   }, [companyRecommendationsRefresh, jobDataReady]);
+
+  useEffect(() => {
+    if (!jobDataReady) return;
+    let cancelled = false;
+    const loadTodayIssues = async () => {
+      try {
+        const response = await fetch("/api/news");
+        if (!response.ok) throw new Error("News request failed");
+        const result = (await response.json()) as { issues?: TodayIssue[] };
+        if (cancelled) return;
+        setTodayIssues(result.issues ?? []);
+        setTodayIssueIndex(0);
+      } catch {
+        if (!cancelled) setTodayIssues([]);
+      } finally {
+        if (!cancelled) setTodayIssuesLoading(false);
+      }
+    };
+    void loadTodayIssues();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobDataReady]);
+
+  useEffect(() => {
+    if (todayIssues.length < 2 || todayIssuesPaused) return;
+    const intervalId = window.setInterval(() => {
+      setTodayIssueIndex((index) => (index + 1) % todayIssues.length);
+    }, 5500);
+    return () => window.clearInterval(intervalId);
+  }, [todayIssues.length, todayIssuesPaused]);
 
   useEffect(() => {
     const modalOpen =
@@ -2353,6 +2395,9 @@ export default function Home() {
     : patrickMessages;
   const activePatrickMessage =
     dailyMessages[patrickMessageIndex % dailyMessages.length];
+  const activeTodayIssue = todayIssues.length
+    ? todayIssues[todayIssueIndex % todayIssues.length]
+    : null;
   const toastTone = /최종 합격/.test(toastText)
     ? "celebration"
     : /못했|실패|오류/.test(toastText)
@@ -2676,11 +2721,18 @@ export default function Home() {
     <main className="app-shell min-h-screen px-4 py-5 text-[#31363f] md:px-8 md:py-7">
       <header className="app-header mx-auto mb-6 flex max-w-[1480px] items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="brand-badge flex h-11 w-11 items-center justify-center rounded-2xl text-2xl">
+          <div className="brand-badge relative flex h-11 w-11 items-center justify-center rounded-2xl text-2xl">
+            <span className="absolute -left-1 -top-1 h-2.5 w-2.5 rounded-full border border-white/70 bg-[#bdeee0]" />
+            <span className="absolute -right-1 top-1 h-1.5 w-1.5 rounded-full bg-white/80" />
             ⭐
           </div>
           <div>
-            <h1 className="brand-title text-xl md:text-2xl">뚱이랑 취뽀</h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="brand-title text-xl md:text-2xl">뚱이랑 취뽀</h1>
+              <span className="hidden items-center gap-1 rounded-full border border-[#ccebdd] bg-[#edf9f4] px-2 py-1 text-[9px] font-extrabold text-[#4f9179] sm:inline-flex">
+                <span className="animate-pulse">〰</span> 취뽀 항해 중
+              </span>
+            </div>
             <p className="text-xs font-medium text-[#92908a]">
               Patrick's Job Hunt · 느긋하게, 하지만 꾸준히
             </p>
@@ -2752,10 +2804,77 @@ export default function Home() {
         </button>
         <button
           onClick={openTarotRoom}
-          className="mr-2 flex items-center gap-1.5 rounded-full border border-[#d8cdf1] bg-[#f3efff] px-3.5 py-2 text-[11px] font-extrabold text-[#6754a8] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#ece5fb]"
+          className="flex items-center gap-1.5 rounded-full border border-[#d8cdf1] bg-[#f3efff] px-3.5 py-2 text-[11px] font-extrabold text-[#6754a8] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#ece5fb]"
         >
           🔮 취업 타로방
         </button>
+        <div
+          className="flex min-w-0 basis-full items-center gap-2 rounded-2xl border border-white/85 bg-white/75 px-3 py-2 shadow-sm md:ml-2 md:basis-0 md:flex-1 md:rounded-full"
+          onMouseEnter={() => setTodayIssuesPaused(true)}
+          onMouseLeave={() => setTodayIssuesPaused(false)}
+        >
+          <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-extrabold text-[#df6680]">
+            <Newspaper size={14} /> 오늘의 이슈
+          </span>
+          <span className="h-4 w-px shrink-0 bg-[#e7e1d8]" />
+          {todayIssuesLoading ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] font-bold text-[#9c978f]">
+              <LoaderCircle size={12} className="animate-spin" /> 취업 뉴스를
+              모으고 있어요
+            </span>
+          ) : activeTodayIssue ? (
+            <a
+              key={activeTodayIssue.id}
+              href={activeTodayIssue.url}
+              target="_blank"
+              rel="noreferrer"
+              className="issue-ticker-item flex min-w-0 flex-1 items-center gap-2"
+              title={activeTodayIssue.title}
+            >
+              <span className="min-w-0 flex-1 truncate text-[11px] font-extrabold text-[#57534d] transition hover:text-[#df6680] md:text-xs">
+                {activeTodayIssue.title}
+              </span>
+              <span className="hidden shrink-0 text-[9px] font-bold text-[#aaa59c] lg:inline">
+                {activeTodayIssue.source}
+              </span>
+              <ExternalLink size={11} className="shrink-0 text-[#aaa59c]" />
+            </a>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[#99948b]">
+              새 취업 이슈를 준비하고 있어요.
+            </span>
+          )}
+          {todayIssues.length > 1 && (
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                onClick={() =>
+                  setTodayIssueIndex(
+                    (index) =>
+                      (index - 1 + todayIssues.length) % todayIssues.length,
+                  )
+                }
+                aria-label="이전 취업 이슈"
+                className="rounded-full p-1 text-[#a39e95] transition hover:bg-[#fff0f4] hover:text-[#df6680]"
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <span className="w-8 text-center text-[9px] font-extrabold text-[#9d988f]">
+                {todayIssueIndex + 1}/{todayIssues.length}
+              </span>
+              <button
+                onClick={() =>
+                  setTodayIssueIndex(
+                    (index) => (index + 1) % todayIssues.length,
+                  )
+                }
+                aria-label="다음 취업 이슈"
+                className="rounded-full p-1 text-[#a39e95] transition hover:bg-[#fff0f4] hover:text-[#df6680]"
+              >
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <section className="mx-auto grid max-w-[1480px] gap-6 md:grid-cols-[minmax(0,1.55fr)_minmax(330px,.8fr)] app-grid">
