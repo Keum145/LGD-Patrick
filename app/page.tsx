@@ -2643,7 +2643,7 @@ export default function Home() {
               🐚
             </div>
             <div className="absolute right-4 top-2 text-3xl opacity-20">🫧</div>
-            <div className="flex min-w-0 flex-1 items-center gap-1 md:gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
               <Patrick />
               <div
                 key={`${todayKey}-${patrickMessageIndex}`}
